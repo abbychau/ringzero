@@ -1,6 +1,7 @@
 import type { AppConfig } from '../config/config.js';
 import type { ImageInput } from '../kernel/types.js';
 import { Runner } from './runner.js';
+import { notifyRunComplete } from './notify.js';
 
 export interface OneShotOptions {
   resume?: string;
@@ -25,6 +26,7 @@ export async function runOneShot(
   const sessionId = runner.sessionId!;
   await runner.init();
   const agent = runner.agent();
+  const t0 = performance.now();
 
   for await (const ev of agent.run(prompt, { images: opts.images })) {
     if (opts.json) {
@@ -45,4 +47,5 @@ export async function runOneShot(
       );
     }
   }
+  notifyRunComplete(Math.round((performance.now() - t0) / 1000));
 }

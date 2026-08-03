@@ -22,6 +22,7 @@ import {
   type PaletteItem,
 } from './state.js';
 import { handleSlashCommand, type CommandDeps } from './commands.js';
+import { notifyPermission, notifyRunComplete } from '../cli/notify.js';
 import { estimateCost, fmtCost } from '../kernel/cost.js';
 import {
   TranscriptRow,
@@ -119,14 +120,17 @@ export function App({
   }, [pushSys]);
 
   useEffect(() => {
-    askRef.current = (prompt: string) =>
-      new Promise<AskResponse>((resolve) => {
+    askRef.current = (prompt: string) => {
+      notifyPermission(prompt);
+      return new Promise<AskResponse>((resolve) => {
         dispatch({ type: 'setModal', modal: { kind: 'confirm', prompt, value: '', resolve } });
       });
+    };
   }, [askRef]);
 
   const runTurn = useCallback(
     async (prompt: string, images?: ImageInput[]) => {
+      const t0 = performance.now();
       runningRef.current = true;
       dispatch({ type: 'runStart' });
       const abort = new AbortController();
@@ -175,6 +179,7 @@ export function App({
           ? `idle · ${fmtUsage(usage)} ≈${fmtCost(estimateCost(runnerRef.current.model, usage))}`
           : status;
       dispatch({ type: 'runEnd', usage, status: finalStatus, ctx });
+      notifyRunComplete(Math.round((performance.now() - t0) / 1000));
     },
     [pushSys],
   );

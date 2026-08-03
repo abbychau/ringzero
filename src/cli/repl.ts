@@ -6,6 +6,7 @@ import type { AskResponse } from '../permission/gate.js';
 import type { TokenUsage, ImageInput } from '../kernel/types.js';
 import type { Agent } from '../kernel/agent.js';
 import { estimateCost, fmtCost } from '../kernel/cost.js';
+import { notifyPermission, notifyRunComplete } from './notify.js';
 
 function makeAsk(rl: readline.Interface): (prompt: string) => Promise<AskResponse> {
   return (prompt: string) =>
@@ -33,7 +34,15 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
     output: process.stdout,
     prompt: 'ringzero> ',
   });
-  const runner = new Runner(config, { model, sessionId: resume, ask: makeAsk(rl) });
+  const ask = makeAsk(rl);
+  const runner = new Runner(config, {
+    model,
+    sessionId: resume,
+    ask: (p) => {
+      notifyPermission(p);
+      return ask(p);
+    },
+  });
   runner.pluginSay = (t) => console.log(t);
   let lastUsage: TokenUsage | undefined;
   // The agent currently running, or null when idle. Typing while a run is in
@@ -83,6 +92,7 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
     const agent = runner.agent();
     runningAgent = agent;
     let usage: TokenUsage | undefined;
+    const t0 = performance.now();
     try {
       for await (const ev of agent.run(line, {
         images: imageState.current ? [imageState.current] : undefined,
@@ -105,6 +115,7 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
       process.stdout.write(
         `\n[usage ${fmtUsage(usage)} ≈${fmtCost(estimateCost(runner.model, usage))}]\n`,
       );
+    notifyRunComplete(Math.round((performance.now() - t0) / 1000));
     rl.prompt();
   });
 
