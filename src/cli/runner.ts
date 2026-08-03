@@ -27,6 +27,7 @@ import {
 import { createMcpTools } from '../mcp/index.js';
 import { loadMcpConfig } from '../mcp/config.js';
 import { makeVerifyHook } from './verify.js';
+import { createVerifyTool } from '../tools/verify.js';
 import { PermissionGate, type AskResponse } from '../permission/gate.js';
 import { compactHistory, estimateContextTokens } from '../kernel/context.js';
 import type { Provider, SessionMessage, Tool } from '../kernel/types.js';
@@ -122,6 +123,9 @@ export class Runner {
         contextBudget: this.config.contextBudget,
         preserveRecentTokens: this.config.preserveRecentTokens,
       }),
+      ...(this.config.verifyCommand
+        ? [createVerifyTool(this.config.verifyCommand, this.config.cwd)]
+        : []),
       ...[...this.skillTools.values()].flat(),
       ...this.pluginTools,
       ...this.mcpTools,
@@ -259,6 +263,13 @@ export class Runner {
   /** System prompt = base + AGENTS/SYSTEM + enabled skills appended AFTER the stable prefix. */
   private currentSystem(): string[] {
     const sys = [...this.config.systemPrompt];
+    if (this.config.verifyCommand) {
+      sys.push(
+        'A verify command is configured. After each write/edit, call the verify tool to ' +
+          'check the build/tests; if it fails, fix the issue and re-verify (up to 3 times), ' +
+          'then report the final result.',
+      );
+    }
     if (this.planMode) {
       sys.push(
         'Plan mode is ON: call the plan tool to present a plan and get approval before any changes. ' +
