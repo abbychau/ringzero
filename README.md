@@ -13,11 +13,17 @@ disclosure (skills), and ephemeral sub-agents.
 - **Reasoning** — `thinking` events from DeepSeek/OpenAI-compat `reasoning_content`
   and Anthropic extended thinking, shown collapsed in the TUI, never persisted.
 - **Providers** — OpenAI-compatible (packyapi / Ollama / LM Studio / OpenRouter /
-  MiniMax…) and Anthropic Messages (with `cache_control`). Chosen from env.
+  MiniMax…), Anthropic Messages (with `cache_control`), and Gemini
+  (`streamGenerateContent`, incl. vision via `inline_data`). Chosen from env.
 - **CJK-aware tokenizer** — ASCII ≈ 4 chars/token, CJK ≈ 1 char/token, used for
   compaction thresholds & budgeting; provider `usage` is the source of truth.
-- **Compaction** — auto-summarizes old messages near the context limit, keeps the
-  tail verbatim (`RINGZERO_PRESERVE_RECENT`).
+- **Compaction 2.0** — auto-summarizes old messages into a structured brief
+  (goals / decisions / files / errors / unfinished), keeps the tail verbatim
+  (`RINGZERO_PRESERVE_RECENT`), folds prior summaries forward, and re-compacts
+  incrementally until the budget fits.
+- **Mid-run injection** — while the agent is running, just type and press Enter:
+  the current stream aborts, your message is queued, and the run continues with
+  it (TUI, REPL, and RPC `prompt {interrupt:true}`).
 - **Tools** — read (full / range / auto-outline for large files) / write / edit,
   grep, glob, `related_files` (importers + same-symbol files), bash, web
   fetch, `git_status` / `git_diff`, `plan`, `todo`, `task` (sub-agent), MCP.
@@ -34,6 +40,9 @@ disclosure (skills), and ephemeral sub-agents.
   stabilize the provider prompt cache.
 - **Checkpoints** — auto-snapshot of the worktree before each run; `/checkpoint`
   - `/rollback` restore it (index + worktree, HEAD untouched).
+- **Verify loop** — after the automatic post-edit check (`RINGZERO_VERIFY`), the
+  agent also gets a `verify` tool to re-run build/tests after each fix
+  (capped at 3 calls per run), with failing exit codes fed back.
 - **Sub-agent** — `task` tool spawns ephemeral Agents (same model as the main
   loop — no multi-model routing); only their summaries enter context. Batch
   mode: pass `tasks: [...]` to fan out N independent subtasks in parallel
@@ -42,9 +51,11 @@ disclosure (skills), and ephemeral sub-agents.
   `.ringzero/mcp.json`.
 - **Skills** — on-demand SKILL.md injection appended after the stable system prefix
   (doesn't bust prompt cache).
-- **Sessions** — append-only JSONL under `~/.ringzero/sessions/`, resumable via `--resume` / `--continue`; auto titles.
+- **Sessions** — append-only JSONL under `~/.ringzero/sessions/`, resumable via `--resume` / `--continue`; auto titles. `/export` writes a Markdown transcript; excess/old sessions auto-archive (`RINGZERO_SESSION_LIMIT`, `RINGZERO_SESSION_KEEP_DAYS`).
 - **Plugins** — single-file ESM plugins add tools, slash commands, and tool hooks.
-- **RPC/SDK** — `--rpc` JSON-RPC over stdin/stdout for embedding.
+- **RPC/SDK** — `--rpc` JSON-RPC over stdin/stdout for embedding, with streamed `prompt/event` notifications and mid-run `interrupt`.
+- **Notifications** — terminal bell + desktop bubble when a long run finishes or a permission prompt waits (`RINGZERO_NOTIFY`, `RINGZERO_NOTIFY_MIN`).
+- **Watch mode** — `--watch "prompt"` re-runs the prompt whenever the project changes (auto-fix loops).
 - **Permission gate** — allow / ask / deny per tool, per-session overrides.
 - **Token/cost dashboard** — per-turn + session input/output/cache breakdown
   with cache hit rate and an estimated cost from a built-in zero-dep price
@@ -52,6 +63,11 @@ disclosure (skills), and ephemeral sub-agents.
 - **Symbol index + `related_files`** — zero-dep ctags-style index
   (`src/tools/indexer.ts`, cached with mtime invalidation); `related_files`
   finds importers and files defining the same symbols before you edit.
+- **Vision** — attach images to any turn: `--image <path>` (CLI), `/image`
+  (TUI/REPL), or `prompt {images: [...]}` (RPC). Images are one-shot — sent
+  once, never persisted to the session store.
+- **Benchmark** — `npm run bench` measures tokens per task, compaction
+  savings, and sub-agent savings against recorded offline fixtures.
 
 ## Install / build
 
@@ -83,6 +99,8 @@ npm link          # then: ringzero "prompt"
 ringzero                          # interactive TUI (fallback: --repl line mode)
 ringzero "prompt"                 # one-shot
 ringzero --json "prompt"          # NDJSON event stream (scriptable)
+ringzero --watch "prompt"         # re-run the prompt on file changes (--yes for writes)
+ringzero --image shot.png "…"     # attach an image to the prompt (repeatable)
 ringzero --sessions               # list saved sessions (then --resume <id>)
 ringzero --resume <id> "prompt"   # continue a session
 ringzero --version
@@ -107,6 +125,8 @@ ringzero --rpc                  # JSON-RPC mode over stdin/stdout
 ringzero --yes "prompt"         # auto-allow all tools (scripted)
 ringzero --model <id> "..."     # override model
 ringzero --verbose "..."        # verbose logging
+ringzero --image shot.png "..." # attach an image (vision models)
+ringzero --watch "..."          # re-run on file changes (use --yes for writes)
 ```
 
 ### TUI keys
@@ -116,12 +136,18 @@ ringzero --verbose "..."        # verbose logging
 `Ctrl+O` or **mouse click** expand/collapse tool output · `Ctrl+T` toggle the todo list ·
 `Ctrl+A/E` line start/end ·
 `Ctrl+U` clear line · `Ctrl+W` delete word · `Ctrl+C` abort run / exit.
+While the agent is running, **typing + Enter injects your message mid-run**
+(the current stream aborts and the run continues with your input).
 Permission prompts appear as an inline modal: `y` yes · `n` no · `a` always · `v` never.
 Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 
 ### Slash commands (REPL & TUI)
 
-`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /new  /exit`
+`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /export [path]  /new  /exit`
+
+`/image <path>` attaches an image to your next message (shown as `[img]` in the
+header); `/image clear` removes it. `/export [path]` writes the current session
+as a Markdown transcript (default: `transcript-<id>.md` in the cwd).
 
 `/usage` shows the session token totals with cache hit rate and estimated cost
 (per-turn breakdown too); the StatusBar keeps a live cost estimate for the
@@ -182,12 +208,22 @@ See `examples/plugins/hello.mjs`.
 ### RPC mode
 
 `ringzero --rpc` speaks JSON-RPC 2.0 over stdin/stdout (one object per line):
-`initialize`, `ping`, `model/get`, `model/set`, `sessions/list`, `sessions/resume`, `prompt`.
+`initialize`, `ping`, `model/get`, `model/set`, `sessions/list`, `sessions/resume`,
+`sessions/export`, `prompt`. `prompt` accepts `notify: true` (streams
+`prompt/event` notifications for every agent event) and
+`interrupt: true` (injects a message into the running prompt, bypassing the
+serial queue). `prompt` also accepts `images: [{ mime, data }]` for vision.
 
 ```bash
 echo '{"jsonrpc":"2.0","id":1,"method":"initialize"}' | ringzero --rpc
 echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}' | ringzero --rpc
 ```
+
+## Development
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, conventions, testing, commit style.
+- [docs/EXTENDING.md](docs/EXTENDING.md) — how to add providers, tools,
+  plugins, skills, slash commands, and use the RPC/SDK.
 
 ## Env knobs
 
@@ -195,6 +231,7 @@ echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}'
 | --------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
 | `API_URL` / `API_KEY` / `MODEL`         | —                 | OpenAI-compatible endpoint                                                                            |
 | `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | —                 | used when `API_URL` is empty                                                                          |
+| `GEMINI_API_KEY` / `GEMINI_MODEL`       | —                 | used when `API_URL` is empty (after Anthropic); `MODEL` wins over `GEMINI_MODEL`                      |
 | `CONTEXT_BUDGET`                        | —                 | short alias for `RINGZERO_CONTEXT_BUDGET` (handy in `.env`)                                           |
 | `RINGZERO_CONTEXT_BUDGET`               | 32000             | compaction trigger (estimated tokens)                                                                 |
 | `RINGZERO_PRESERVE_RECENT`              | 8000              | tail tokens kept verbatim on compaction                                                               |
@@ -208,6 +245,10 @@ echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}'
 | `RINGZERO_PLAN_MODE`                    | `0`               | start with plan mode on (`1`/`true`)                                                                  |
 | `RINGZERO_ALLOW_PRIVATE_NET`            | `0`               | `1` disables the `web_fetch` SSRF guard (not recommended)                                             |
 | `RINGZERO_BASH_FULL_ENV`                | `0`               | `1` passes the full environment to bash children (secrets are stripped by default)                    |
+| `RINGZERO_NOTIFY`                       | `1` (TTY only)    | `0` disables bell/desktop notifications                                                               |
+| `RINGZERO_NOTIFY_MIN`                   | `30`              | minimum run length (seconds) before a completion notification fires                                   |
+| `RINGZERO_SESSION_LIMIT`                | `50`              | max sessions kept; older ones archive to `<sessions>/archive`                                         |
+| `RINGZERO_SESSION_KEEP_DAYS`            | `0`               | archive sessions older than N days (`0` = off)                                                        |
 
 ### Workspace sandbox
 
@@ -220,12 +261,12 @@ attempts to touch anything outside it are rejected instead of executed.
 ```
 src/
   kernel/      types, tokenizer, agent loop, context/compaction, truncate, redact
-  providers/   provider interface, openai-compat, anthropic, SSE, registry
-  tools/       fs, search (grep/glob), indexer + related_files, bash, web, plan, todo, task (sub-agent)
+  providers/   provider interface, openai-compat, anthropic, gemini, SSE, retry, registry
+  tools/       fs, search (grep/glob), indexer + related_files, bash, web, plan, todo, task (sub-agent), verify
   mcp/         client, stdio+http transports, config, tool bridge
-  session/     JSONL store
+  session/     JSONL store, markdown export
   permission/  gate
   skills/      loader
-  cli/         index (args), repl, one-shot/json
+  cli/         index (args), repl, one-shot/json, rpc, watch, notify, runner
   config/      env + app config
 ```

@@ -37,13 +37,13 @@ Status legend: `[ ]` planned · `[x]` done
 - ~~**P1.3 Multi-model routing**~~ — rejected by design: compaction,
   sub-agents, and the main loop all use the same model (simpler,
   predictable, one API key).
-- [ ] **P1.4 Compaction 2.0** — structured summary template (goals/decisions/
+- [x] **P1.4 Compaction 2.0** — structured summary template (goals/decisions/
       files/errors/unfinished), keep tool-call args out of the summarize prompt,
       incremental compaction, carry the previous summary forward.
 - [x] **P1.5 Token/cost dashboard** — per-turn input/output/cache breakdown,
       cache hit rate, estimated cost (built-in model price table, zero-dep).
-- [ ] **P1.6 Mid-run interruption** — pause → user injects a message → resume.
-- [ ] **P1.7 Gemini provider + vision** — Gemini API (free tier, CJK users);
+- [x] **P1.6 Mid-run interruption** — pause → user injects a message → resume.
+- [x] **P1.7 Gemini provider + vision** — Gemini API (free tier, CJK users);
       content blocks for image input.
 
 ## P2 — Scale
@@ -52,24 +52,24 @@ Status legend: `[ ]` planned · `[x]` done
       `related_files` tool ("changing A means checking B").
 - [x] **P2.2 Parallel research fan-out** — `task` batch mode: N sub-agents in
       parallel, merged results.
-- [ ] **P2.3 Automatic verify loop** — edit → verify → fix → rerun (built on
+- [x] **P2.3 Automatic verify loop** — edit → verify → fix → rerun (built on
       P0.4).
-- [ ] **P2.4 Notifications** — desktop/bell on long-run completion or
+- [x] **P2.4 Notifications** — desktop/bell on long-run completion or
       permission requests (zero-dep: PowerShell toast / terminal bell).
-- [ ] **P2.5 Session export & pruning** — `/export` Markdown transcript,
+- [x] **P2.5 Session export & pruning** — `/export` Markdown transcript,
       automatic session archiving.
 
 ## P3 — Platform & engineering
 
-- [ ] **P3.1 Token-efficiency benchmark suite** — recorded fixtures measuring
+- [x] **P3.1 Token-efficiency benchmark suite** — recorded fixtures measuring
       tokens per task, compaction savings, sub-agent savings, cache hit rate.
       The philosophy needs numbers (marketing + regression guard).
-- [ ] **P3.2 E2E tests with recorded provider responses** — full agent loop
+- [x] **P3.2 E2E tests with recorded provider responses** — full agent loop
       offline (101 unit tests today, all offline; no recorded-feedback E2E yet).
-- [ ] **P3.3 CI on three platforms** (currently one workflow).
-- [ ] **P3.4 `--watch` mode / SDK polish** — file-watch rerun, RPC streaming
+- [x] **P3.3 CI on three platforms** (currently one workflow).
+- [x] **P3.4 `--watch` mode / SDK polish** — file-watch rerun, RPC streaming
       event subscription.
-- [ ] **P3.5 Docs** — CONTRIBUTING.md, kernel/providers/tools extension guide.
+- [x] **P3.5 Docs** — CONTRIBUTING.md, kernel/providers/tools extension guide.
 
 ## Suggested execution order
 

@@ -5,6 +5,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Compaction 2.0: structured summary brief (goals / decisions / files /
+  errors / unfinished), tool-call args excluded from the summarize request,
+  incremental folding passes until the budget fits
+  (`src/kernel/context.ts`).
+- Mid-run message injection: typing + Enter while the agent runs aborts the
+  current stream, queues the message, and continues (TUI, REPL, and RPC
+  `prompt {text, interrupt: true}`); new `injected` agent event
+  (`src/kernel/agent.ts`, `src/tui/app.tsx`, `src/cli/repl.ts`, `src/cli/rpc.ts`).
+- Gemini provider (`src/providers/gemini.ts`) with function calling and
+  vision (`inline_data`); picked when `GEMINI_API_KEY` is set and `API_URL`
+  is empty (after Anthropic).
+- Vision everywhere: `--image <path>` (CLI, repeatable), `/image <path>`
+  (TUI + REPL), `prompt {images: [...]}` (RPC). Images are one-shot and
+  never persisted to the session store; OpenAI-compat / Anthropic message
+  conversion now embeds images as multimodal content.
+- `verify` tool: the agent can re-run the project verify command after each
+  fix (capped at 3 calls per run), with exit codes in the output
+  (`src/tools/verify.ts`, wired in `src/cli/runner.ts`).
+- Desktop notifications: terminal bell + native bubble (PowerShell toast /
+  osascript / notify-send) on long runs and permission prompts
+  (`src/cli/notify.ts`; `RINGZERO_NOTIFY`, `RINGZERO_NOTIFY_MIN`).
+- Session export & pruning: `/export [path]` (TUI + REPL) and RPC
+  `sessions/export` write a Markdown transcript (`src/session/export.ts`);
+  `SessionStore.prune()` auto-archives excess/old sessions
+  (`RINGZERO_SESSION_LIMIT`, `RINGZERO_SESSION_KEEP_DAYS`).
+- Recorded-provider E2E tests: scripted provider harness
+  (`test/util/scripted.ts`) + fixtures (`test/fixtures/explore.json`,
+  `compact.json`, `fanout.json`) covering tool round-trips, repeated
+  compaction, and parallel sub-agent fan-out (`test/e2e.test.ts`).
+- Token-efficiency benchmark: `npm run bench` runs every fixture with
+  compaction on/off and reports tokens per task, final context size, and
+  compaction savings (`scripts/bench.ts`).
+- CI matrix across Ubuntu / macOS / Windows (`.github/workflows/ci.yml`).
+- `--watch "prompt"` mode: re-runs the prompt whenever the project changes
+  (`src/cli/watch.ts`).
+- RPC streaming: `prompt {notify: true}` emits `prompt/event` notifications;
+  `prompt {interrupt: true}` bypasses the serial queue for mid-run injection.
+- `consumeSSE` flushes a final partial line (streams that end without a
+  trailing newline).
+- `CONTRIBUTING.md` and `docs/EXTENDING.md` (provider/tool/plugin/RPC guides).
+
+### Changed
+
+- Provider registry order: `API_URL` wins, then Anthropic, then Gemini.
+- TUI: mid-run Enter injects instead of dropping input; `[img]` indicator in
+  the header when an image is attached; `/image` + `/export` in the slash
+  palette.
+- README: new features, env knobs (`GEMINI_*`, `RINGZERO_NOTIFY*`,
+  `RINGZERO_SESSION_*`), commands, and development links.
+
 ### Fixed
 
 - Auto-compaction results are now persisted to the session store via a new
