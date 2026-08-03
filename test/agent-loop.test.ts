@@ -4,13 +4,15 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { Agent, type AgentEvent } from '../src/kernel/agent.js';
+import { Agent, PLAN_BLOCK_TEXT, type AgentEvent } from '../src/kernel/agent.js';
 import { PermissionGate } from '../src/permission/gate.js';
 import { countTokens } from '../src/kernel/tokenizer.js';
 import { newId } from '../src/kernel/id.js';
 import { readFileTool, editFileTool } from '../src/tools/fs.js';
 import { grepTool, globTool } from '../src/tools/search.js';
 import { createTaskTool } from '../src/tools/task.js';
+import { planTool } from '../src/tools/plan.js';
+import { PLAN_APPROVED, PLAN_REJECTED } from '../src/kernel/types.js';
 import type {
   Provider,
   ProviderMessage,
@@ -689,4 +691,150 @@ test('sub-agents: a failing subtask surfaces its error to the parent', async () 
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
+});
+
+test('plan mode: mutating tools are blocked until the user approves a plan', async () => {
+  const plan = planTool();
+  let writes = 0;
+  const write = makeTool('write', () => {
+    writes++;
+    return 'x.txt written';
+  });
+  const provider = scriptedProvider((msgs) => {
+    const last = lastTool(msgs);
+    if (!last) return { calls: [{ name: 'write', args: { path: 'x.txt' } }] };
+    if (last.content === PLAN_BLOCK_TEXT)
+      return { calls: [{ name: 'plan', args: { plan: 'write x.txt' } }] };
+    if (last.content === PLAN_APPROVED)
+      return { calls: [{ name: 'write', args: { path: 'x.txt' } }] };
+    return { text: `done: ${last.content}` };
+  });
+  const agent = new Agent({
+    provider,
+    tools: [write, plan],
+    permission: allowAll,
+    planMode: true,
+  });
+  const { events, finalText } = await run(agent, 'write x.txt');
+  assert.equal(finalText, 'done: x.txt written');
+  assert.equal(writes, 1, 'write runs only after plan approval');
+  const results = events.filter(
+    (e): e is Extract<AgentEvent, { type: 'tool_result' }> => e.type === 'tool_result',
+  );
+  assert.deepEqual(
+    results.map((r) => r.output),
+    [PLAN_BLOCK_TEXT, PLAN_APPROVED, 'x.txt written'],
+  );
+  // The pre-approval write is denied; the post-approval write is auto-allowed
+  // (permission event fires with allowed=true, but the user is never prompted).
+  const writePerms = events.filter(
+    (e): e is Extract<AgentEvent, { type: 'permission' }> =>
+      e.type === 'permission' && e.name === 'write',
+  );
+  assert.deepEqual(
+    writePerms.map((p) => p.allowed),
+    [false, true],
+  );
+});
+
+test('plan mode: a rejected plan keeps blocking mutating tools', async () => {
+  const plan = planTool();
+  let writes = 0;
+  const write = makeTool('write', () => {
+    writes++;
+    return 'written';
+  });
+  const denyAll = new PermissionGate({ rules: {}, ask: async () => 'no' as const });
+  const provider = scriptedProvider((msgs) => {
+    const last = lastTool(msgs);
+    if (!last) return { calls: [{ name: 'write', args: {} }] };
+    if (last.content === PLAN_BLOCK_TEXT)
+      return { calls: [{ name: 'plan', args: { plan: 'write something' } }] };
+    return { text: 'giving up' };
+  });
+  const agent = new Agent({
+    provider,
+    tools: [write, plan],
+    permission: denyAll,
+    planMode: true,
+  });
+  const { events } = await run(agent, 'write something');
+  assert.equal(writes, 0, 'write never executes while the plan is rejected');
+  const results = events.filter(
+    (e): e is Extract<AgentEvent, { type: 'tool_result' }> => e.type === 'tool_result',
+  );
+  assert.deepEqual(
+    results.map((r) => r.output),
+    [PLAN_BLOCK_TEXT, PLAN_REJECTED],
+  );
+});
+
+test('tool cache: identical pure tool calls are deduped within a run', async () => {
+  let calls = 0;
+  const read = makeTool('read_file', () => {
+    calls++;
+    return 'AAA';
+  });
+  const provider = scriptedProvider((msgs) => {
+    if (!lastTool(msgs))
+      return {
+        calls: [
+          { name: 'read_file', args: { path: 'a.txt' } },
+          { name: 'read_file', args: { path: 'a.txt' } },
+        ],
+      };
+    return { text: `saw ${msgs.filter((m) => m.role === 'tool').length} results` };
+  });
+  const agent = new Agent({ provider, tools: [read], permission: allowAll });
+  const { events, finalText } = await run(agent, 'read a.txt twice');
+  assert.equal(finalText, 'saw 2 results');
+  assert.equal(calls, 1, 'second identical call served from cache');
+  const results = events.filter(
+    (e): e is Extract<AgentEvent, { type: 'tool_result' }> => e.type === 'tool_result',
+  );
+  assert.ok(
+    results.some((r) => r.output.includes('[cached result]')),
+    'one result should be flagged as cached',
+  );
+});
+
+test('maxConcurrency: limit 1 serializes tool execution', async () => {
+  let active = 0;
+  let maxActive = 0;
+  const slow: Tool = {
+    definition: {
+      name: 'slow',
+      description: 'slow tool',
+      inputSchema: { type: 'object', properties: {} },
+    },
+    execute: async () => {
+      active++;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((r) => setTimeout(r, 20));
+      active--;
+      return 'ok';
+    },
+  };
+  const provider = scriptedProvider((msgs) => {
+    const n = msgs.filter((m) => m.role === 'tool').length;
+    if (n === 0) {
+      return {
+        calls: [
+          { name: 'slow', args: {} },
+          { name: 'slow', args: {} },
+          { name: 'slow', args: {} },
+        ],
+      };
+    }
+    return { text: `done ${n}` };
+  });
+  const agent = new Agent({ provider, tools: [slow], permission: allowAll, maxConcurrency: 1 });
+  const { events, finalText } = await run(agent, 'run three in parallel');
+  assert.equal(finalText, 'done 3');
+  assert.equal(maxActive, 1, `expected serialized execution, saw max ${maxActive}`);
+  // all three results still arrive in call order
+  const results = events.filter(
+    (e): e is Extract<AgentEvent, { type: 'tool_result' }> => e.type === 'tool_result',
+  );
+  assert.equal(results.length, 3);
 });

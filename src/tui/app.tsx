@@ -66,7 +66,7 @@ export function App({
   mouseCbRef,
   onExit,
 }: AppProps): React.JSX.Element {
-  const [state, dispatch] = useReducer(reducer, initial(initialModel));
+  const [state, dispatch] = useReducer(reducer, initial(initialModel, runner.isPlanMode()));
   const { rows: termRows, columns } = useWindowSize();
   const { exit } = useApp();
   const quit = (): void => {
@@ -87,11 +87,14 @@ export function App({
   const slashH = !state.modal && slashItems.length > 0 ? Math.min(slashItems.length, 8) : 0;
   const headerH = 1;
   const footerH = 2;
+  // Collapsed todo strip is 1 line; expanded is one line per item.
+  const todosH =
+    !state.modal && state.todos.length > 0 ? (state.todosExpanded ? state.todos.length : 1) : 0;
   // Footer = status-or-dropdown(1..slashH) + input(inputLines). Extra rows shrink
   // the transcript so the frame still fits the viewport.
   const transH = Math.max(
     1,
-    termRows - headerH - footerH - (inputLines(state.input) - 1) - Math.max(0, slashH - 1),
+    termRows - headerH - footerH - todosH - (inputLines(state.input) - 1) - Math.max(0, slashH - 1),
   );
   const allRows = useMemo(
     () => layoutBlocks(state.blocks, Math.max(1, columns)),
@@ -136,9 +139,11 @@ export function App({
               type: 'push',
               block: { tag: 'tool', name: ev.name, args: ev.args, done: false, expanded: false },
             });
-          else if (ev.type === 'tool_result')
+          else if (ev.type === 'tool_result') {
             dispatch({ type: 'setToolOutput', output: ev.output, done: true, name: ev.name });
-          else if (ev.type === 'permission' && !ev.allowed)
+            if (ev.name === 'todo')
+              dispatch({ type: 'setTodos', todos: runnerRef.current.listTodos() });
+          } else if (ev.type === 'permission' && !ev.allowed)
             pushSys(`permission denied: ${ev.name}`);
           else if (ev.type === 'compacting') pushSys('compacting context…');
           else if (ev.type === 'finish') usage = ev.usage;
@@ -227,6 +232,8 @@ export function App({
       { label: '/compact', hint: 'compact context', run: () => void runCommand('/compact') },
       { label: '/permission', run: () => void runCommand('/permission') },
       { label: '/skills', run: () => void runCommand('/skills') },
+      { label: '/plan', hint: 'toggle plan mode', run: () => void runCommand('/plan') },
+      { label: '/todos', hint: 'toggle todo list', run: () => void runCommand('/todos') },
       { label: '/new', hint: 'start new session', run: () => void runCommand('/new') },
       { label: '/exit', run: () => quit() },
     ],
@@ -417,6 +424,10 @@ export function App({
       dispatch({ type: 'toggleTool' });
       return;
     }
+    if (key.ctrl && c === 't') {
+      dispatch({ type: 'toggleTodos' });
+      return;
+    }
     if (key.ctrl && c === 'r') {
       openSearch();
       return;
@@ -487,8 +498,10 @@ export function App({
         if (d) dispatch({ type: 'scroll', delta: d });
       } else if (e.type === 'down') {
         // Mouse y is 1-based terminal row; header is row 0 (0-based), so the
-        // transcript starts at row 1 → transcript line index = e.y - 2.
-        const lineIdx = e.y - 2;
+        // transcript starts after header + todo strip → line index = y - 2 - todosH.
+        const s = stateRef.current;
+        const todosH = s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
+        const lineIdx = e.y - 2 - todosH;
         const row = layoutRef.current.visible[lineIdx];
         if (row) {
           const b = stateRef.current.blocks[row.blockIdx];
@@ -533,8 +546,27 @@ export function App({
       <Text inverse>
         {' '}
         RingZero · {state.model}
+        {state.planMode ? ' · [plan]' : ''}
         {runnerRef.current.sessionId ? ` · ${runnerRef.current.sessionId}` : ''}
       </Text>
+      {todosH > 0 && (
+        <Box flexDirection="column" height={todosH}>
+          {state.todosExpanded ? (
+            state.todos.map((t, i) => (
+              <Text key={i} dimColor={t.done}>
+                {' '}
+                {i + 1}. {t.done ? '[x]' : '[ ]'} {t.text}
+              </Text>
+            ))
+          ) : (
+            <Text dimColor>
+              {' '}
+              📋 {state.todos.filter((t) => t.done).length}/{state.todos.length} done — Ctrl+T to
+              expand
+            </Text>
+          )}
+        </Box>
+      )}
       <Box flexDirection="column" height={transH}>
         {win.visible.length === 0 ? (
           <Text dimColor>RingZero — type a message · /help for commands</Text>

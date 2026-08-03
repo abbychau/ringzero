@@ -49,6 +49,26 @@ test('reducer history + clear', () => {
   assert.equal(s.blocks.length, 0);
 });
 
+test('reducer plan mode + todos', () => {
+  let s = initial('m', true);
+  assert.equal(s.planMode, true);
+  s = reducer(s, { type: 'setPlanMode', planMode: false });
+  assert.equal(s.planMode, false);
+  s = reducer(s, {
+    type: 'setTodos',
+    todos: [
+      { text: 'a', done: false },
+      { text: 'b', done: true },
+    ],
+  });
+  assert.equal(s.todos.length, 2);
+  assert.equal(s.todosExpanded, false);
+  s = reducer(s, { type: 'toggleTodos' });
+  assert.equal(s.todosExpanded, true);
+  s = reducer(s, { type: 'toggleTodos' });
+  assert.equal(s.todosExpanded, false);
+});
+
 test('layoutBlocks wraps and collapses tool preview', () => {
   const blocks: Block[] = [
     { tag: 'user', text: 'abc' },
@@ -148,6 +168,9 @@ test('slashMatches filters commands by prefix (and a lone slash shows all)', () 
   assert.ok(all.includes('exit'));
   assert.deepEqual(slashMatches('/c'), ['context', 'compact', 'checkpoint']);
   assert.deepEqual(slashMatches('/com'), ['compact']);
+  // plan/todos are registered for autocomplete
+  assert.deepEqual(slashMatches('/p'), ['permission', 'plan']);
+  assert.deepEqual(slashMatches('/t'), ['todos']);
   // plugin extras are merged and deduped against built-ins
   assert.ok(slashMatches('/', ['mcp-list']).includes('mcp-list'));
   assert.deepEqual(slashMatches('/m', ['mcp-list']), ['model', 'mcp-list']);

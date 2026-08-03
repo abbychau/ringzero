@@ -9,10 +9,34 @@ import type {
   TokenUsage,
   ProviderMessage,
 } from './types.js';
+import { PLAN_APPROVED } from './types.js';
 import { newId } from './id.js';
 import { truncateOutput } from './truncate.js';
 import { compactHistory, estimateContextTokens } from './context.js';
+import { makeRedactor } from './redact.js';
 import { PermissionGate } from '../permission/gate.js';
+
+/** Tools that never mutate the project (allowed in plan mode before approval). */
+const READ_ONLY_TOOLS = new Set([
+  'read_file',
+  'grep',
+  'glob',
+  'git_status',
+  'git_diff',
+  'web_fetch',
+]);
+
+/** Pure tools whose identical repeated calls are deduped within a run. */
+const CACHEABLE_TOOLS = new Set([
+  'read_file',
+  'grep',
+  'glob',
+  'git_status',
+  'git_diff',
+  'web_fetch',
+]);
+
+export const PLAN_BLOCK_TEXT = 'plan mode: present a plan with the plan tool first';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
@@ -59,6 +83,10 @@ export interface AgentOptions {
     args: Record<string, unknown>,
     output: string,
   ) => Promise<{ output?: string } | undefined> | { output?: string } | undefined;
+  /** Plan mode: non-read-only tools are blocked until the user approves a plan. */
+  planMode?: boolean;
+  /** Max parallel tool executions per turn (default 4). */
+  maxConcurrency?: number;
 }
 
 function toProviderMessages(history: SessionMessage[]): ProviderMessage[] {
@@ -78,10 +106,19 @@ export class Agent {
   private readonly opts: Required<
     Pick<
       AgentOptions,
-      'contextBudget' | 'preserveRecentTokens' | 'maxSteps' | 'maxToolOutputChars' | 'compact'
+      | 'contextBudget'
+      | 'preserveRecentTokens'
+      | 'maxSteps'
+      | 'maxToolOutputChars'
+      | 'compact'
+      | 'maxConcurrency'
     >
   > &
     AgentOptions;
+  /** Set once the user approves a plan via the plan tool (per run). */
+  private planApproved = false;
+  /** Tool call counts per session, used to order tool definitions by usage. */
+  private toolUsage = new Map<string, number>();
 
   constructor(options: AgentOptions) {
     this.provider = options.provider;
@@ -93,6 +130,7 @@ export class Agent {
       maxSteps: 24,
       maxToolOutputChars: 30_000,
       compact: true,
+      maxConcurrency: 4,
       ...options,
     };
   }
@@ -109,6 +147,14 @@ export class Agent {
     let history: SessionMessage[] = [...(this.opts.history ?? [])];
     const cwd = this.opts.cwd ?? process.cwd();
     const home = this.opts.home ?? homedir();
+    const redact = makeRedactor();
+    // Tool definitions ordered by usage frequency (stable within a run, which
+    // keeps the provider prompt cache stable across runs).
+    const toolDefs = this.orderedToolDefs();
+    // Per-run dedupe for pure tools (repeated read_file/grep/glob results).
+    // inFlight coalesces concurrent identical calls; toolCache holds settled results.
+    const toolCache = new Map<string, string>();
+    const toolInFlight = new Map<string, Promise<string>>();
 
     const toolCtx: ToolContext = {
       cwd,
@@ -146,7 +192,7 @@ export class Agent {
       if (this.opts.compact && history.length > 2) {
         const est = estimateContextTokens(this.provider, history, {
           system: this.opts.system,
-          tools: this.toolDefs,
+          tools: toolDefs,
         });
         if (est > this.opts.contextBudget) {
           yield emit({ type: 'compacting' });
@@ -170,7 +216,7 @@ export class Agent {
           for await (const ev of this.provider.chat({
             system: this.opts.system,
             messages,
-            tools: this.toolDefs,
+            tools: toolDefs,
             signal: this.opts.signal,
           })) {
             if (ev.type === 'text') {
@@ -252,7 +298,7 @@ export class Agent {
           if (r?.allowed === false) blocked = true;
           else if (r?.args) args = r.args;
         }
-        yield emit({ type: 'tool_start', name: call.name, args: call.args });
+        yield emit({ type: 'tool_start', name: call.name, args: redact(call.args) });
         if (blocked) {
           push({
             id: newId('msg'),
@@ -271,7 +317,38 @@ export class Agent {
           });
           continue;
         }
-        const { allowed } = await this.opts.permission.check(call.name, call.args);
+        // Plan mode: only read-only tools + the plan tool run until the user
+        // approves. Non-read-only calls are blocked with a hint to plan first.
+        if (
+          this.opts.planMode &&
+          !this.planApproved &&
+          call.name !== 'plan' &&
+          !READ_ONLY_TOOLS.has(call.name)
+        ) {
+          push({
+            id: newId('msg'),
+            role: 'tool',
+            toolCallId: call.id,
+            toolName: call.name,
+            content: PLAN_BLOCK_TEXT,
+            ts: Date.now(),
+          });
+          yield emit({ type: 'permission', name: call.name, allowed: false });
+          yield emit({
+            type: 'tool_result',
+            name: call.name,
+            output: PLAN_BLOCK_TEXT,
+            truncated: false,
+          });
+          continue;
+        }
+        // The plan tool self-gates through ctx.ask; after approval, tools run
+        // without further permission prompts.
+        let allowed = true;
+        if (call.name !== 'plan' && !(this.opts.planMode && this.planApproved)) {
+          const r = await this.opts.permission.check(call.name, call.args);
+          allowed = r.allowed;
+        }
         yield emit({ type: 'permission', name: call.name, allowed });
         if (!allowed) {
           push({
@@ -290,20 +367,51 @@ export class Agent {
           });
           continue;
         }
+        this.toolUsage.set(call.name, (this.toolUsage.get(call.name) ?? 0) + 1);
         work.push({ call, tool, args });
       }
 
-      // Phase 2 (concurrent): execute all approved tools in parallel, then report
-      // results in the ORIGINAL call order so consumers can attribute each output
-      // to the right tool block.
-      const results = await Promise.all(
-        work.map(async ({ call, tool, args }) => {
+      // Phase 2 (concurrent, capped): execute approved tools with a concurrency
+      // limit, then report results in the ORIGINAL call order so consumers can
+      // attribute each output to the right tool block.
+      const results: { call: ToolCall; truncated: string; wasTruncated: boolean }[] = new Array(
+        work.length,
+      );
+      const limit = Math.max(1, this.opts.maxConcurrency);
+      let next = 0;
+      const runOne = async () => {
+        while (next < work.length) {
+          const i = next++;
+          const { call, tool, args } = work[i]!;
+          const key = CACHEABLE_TOOLS.has(call.name)
+            ? `${call.name}\u0000${JSON.stringify(args)}`
+            : null;
           let output: string;
-          try {
-            output = await tool.execute(args, toolCtx);
-          } catch (err) {
-            output = `error: ${err instanceof Error ? err.message : String(err)}`;
+          const cached = key !== null ? toolCache.get(key) : undefined;
+          if (cached !== undefined) {
+            output = `${cached}\n[cached result]`;
+          } else {
+            let pending = key !== null ? toolInFlight.get(key) : undefined;
+            if (pending) {
+              // Concurrent duplicate: wait for the in-flight execution.
+              output = `${await pending}\n[cached result]`;
+            } else {
+              const run = (async () => {
+                try {
+                  return await tool.execute(args, toolCtx);
+                } catch (err) {
+                  return `error: ${err instanceof Error ? err.message : String(err)}`;
+                }
+              })();
+              if (key !== null) toolInFlight.set(key, run);
+              output = await run;
+              if (key !== null) {
+                toolInFlight.delete(key);
+                toolCache.set(key, output);
+              }
+            }
           }
+          if (call.name === 'plan' && output === PLAN_APPROVED) this.planApproved = true;
           const first = truncateOutput(output, this.opts.maxToolOutputChars);
           let text = first.text;
           let wasTruncated = first.truncated;
@@ -316,9 +424,11 @@ export class Agent {
               wasTruncated = again.truncated;
             }
           }
-          return { call, truncated: text, wasTruncated };
-        }),
-      );
+          text = redact(text);
+          results[i] = { call, truncated: text, wasTruncated };
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(limit, work.length) }, () => runOne()));
       for (const { call, truncated, wasTruncated } of results) {
         push({
           id: newId('msg'),
@@ -340,6 +450,15 @@ export class Agent {
     }
 
     yield emit({ type: 'finish', usage, steps });
+  }
+
+  private orderedToolDefs(): ToolDefinition[] {
+    if (this.toolUsage.size === 0) return this.toolDefs;
+    return [...this.toolDefs].sort(
+      (a, b) =>
+        (this.toolUsage.get(b.name) ?? 0) - (this.toolUsage.get(a.name) ?? 0) ||
+        a.name.localeCompare(b.name),
+    );
   }
 }
 

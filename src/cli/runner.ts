@@ -30,12 +30,15 @@ import { makeVerifyHook } from './verify.js';
 import { PermissionGate, type AskResponse } from '../permission/gate.js';
 import { compactHistory, estimateContextTokens } from '../kernel/context.js';
 import type { Provider, SessionMessage, Tool } from '../kernel/types.js';
+import { createTodoTool, type TodoItem } from '../tools/todo.js';
 
 export interface RunnerOptions {
   sessionId?: string;
   model?: string;
   /** Interactive ask handler. Defaults to deny (safe for scripts). */
   ask?: (prompt: string) => Promise<AskResponse>;
+  /** Start in plan mode (read-only until the user approves a plan). */
+  planMode?: boolean;
 }
 
 /** Wires config + store + tools + provider into a runnable Agent, per session. */
@@ -47,6 +50,9 @@ export class Runner {
   model: string;
   private history: SessionMessage[];
   private checkpointsDir: string;
+  private todosDir: string;
+  private todos: TodoItem[] = [];
+  private planMode: boolean;
   private enabledSkills: string[] = [];
   private mcpTools: Tool[] = [];
   private mcpInited = false;
@@ -62,9 +68,14 @@ export class Runner {
     this.config = config;
     this.store = new SessionStore(config.sessionsDir);
     this.checkpointsDir = join(config.home, '.ringzero', 'checkpoints');
+    this.todosDir = join(config.home, '.ringzero', 'todos');
     this.sessionId = opts.sessionId;
     this.history = this.sessionId ? this.store.load(this.sessionId) : [];
+    if (this.sessionId) this.loadTodos(this.sessionId);
     this.model = opts.model ?? config.env.model;
+    this.planMode =
+      opts.planMode ??
+      (process.env.RINGZERO_PLAN_MODE === '1' || process.env.RINGZERO_PLAN_MODE === 'true');
     this.gate = new PermissionGate({
       rules: config.permissions,
       ask: opts.ask ?? (async () => 'no' as const),
@@ -102,6 +113,7 @@ export class Runner {
     const provider = this.makeProvider();
     const tools = [
       ...defaultTools(),
+      createTodoTool(this.todos, () => this.saveTodos()),
       createTaskTool({
         provider,
         permission: this.gate,
@@ -134,6 +146,7 @@ export class Runner {
       contextBudget: this.config.contextBudget,
       preserveRecentTokens: this.config.preserveRecentTokens,
       maxSteps: this.config.maxSteps,
+      planMode: this.planMode,
       signal,
       onBeforeTool: async (name, args) => {
         if (!checkpointed && this.sessionId) {
@@ -237,6 +250,12 @@ export class Runner {
   /** System prompt = base + AGENTS/SYSTEM + enabled skills appended AFTER the stable prefix. */
   private currentSystem(): string[] {
     const sys = [...this.config.systemPrompt];
+    if (this.planMode) {
+      sys.push(
+        'Plan mode is ON: call the plan tool to present a plan and get approval before any changes. ' +
+          'Only read-only tools are allowed until the plan is approved.',
+      );
+    }
     for (const name of this.enabledSkills) {
       const found = this.listSkills().find((s) => s.name === name);
       if (found) sys.push(`# Skill: ${name}\n${loadSkill(found.path)}`);
@@ -246,6 +265,51 @@ export class Runner {
 
   setModel(model: string): void {
     this.model = model;
+  }
+
+  /** Toggle plan mode for new runs (takes effect next turn). */
+  setPlanMode(on: boolean): void {
+    this.planMode = on;
+  }
+
+  isPlanMode(): boolean {
+    return this.planMode;
+  }
+
+  // ---- Todos -------------------------------------------------------------------
+
+  /** Current todo list (shared with the todo tool). */
+  listTodos(): TodoItem[] {
+    return this.todos;
+  }
+
+  private todosFile(sessionId: string): string {
+    return join(this.todosDir, `${sessionId}.json`);
+  }
+
+  private loadTodos(sessionId: string): void {
+    try {
+      const raw = readFileSync(this.todosFile(sessionId), 'utf8');
+      const arr: unknown = JSON.parse(raw);
+      this.todos = Array.isArray(arr)
+        ? arr.filter(
+            (t): t is TodoItem =>
+              !!t && typeof t === 'object' && typeof (t as TodoItem).text === 'string',
+          )
+        : [];
+    } catch {
+      this.todos = [];
+    }
+  }
+
+  private saveTodos(): void {
+    if (!this.sessionId) return;
+    try {
+      mkdirSync(this.todosDir, { recursive: true });
+      writeFileSync(this.todosFile(this.sessionId), JSON.stringify(this.todos));
+    } catch {
+      /* ignore */
+    }
   }
 
   private makeProvider(): Provider {
@@ -288,12 +352,14 @@ export class Runner {
     if (!found) return false;
     this.sessionId = id;
     this.history = this.store.load(id);
+    this.loadTodos(id);
     return true;
   }
 
   reset(): void {
     this.sessionId = undefined;
     this.history = [];
+    this.todos = [];
   }
 
   // ---- Git checkpoints -------------------------------------------------------

@@ -19,7 +19,19 @@ disclosure (skills), and ephemeral sub-agents.
 - **Compaction** — auto-summarizes old messages near the context limit, keeps the
   tail verbatim (`RINGZERO_PRESERVE_RECENT`).
 - **Tools** — read (full / range / auto-outline for large files) / write / edit,
-  grep, glob, bash, web fetch, `git_status` / `git_diff`, `task` (sub-agent), MCP.
+  grep, glob, bash, web fetch, `git_status` / `git_diff`, `plan`, `todo`,
+  `task` (sub-agent), MCP.
+- **Plan mode** — `/plan` gates the agent: only read-only tools run until it
+  presents a plan via the `plan` tool and you approve it; approved plans run
+  without further permission prompts.
+- **Todos** — agent-maintained checklist (`todo` tool), persisted per session,
+  shown as a collapsible strip in the TUI (`Ctrl+T`, `/todos`).
+- **Security** — secret values redacted from tool output/logs, `web_fetch`
+  blocks private/loopback addresses (SSRF guard), bash children get a
+  sanitized env and a capped timeout.
+- **Tool efficiency** — per-run result cache for pure tools (deduped identical
+  reads), capped parallel tool execution, tool definitions ordered by usage to
+  stabilize the provider prompt cache.
 - **Checkpoints** — auto-snapshot of the worktree before each run; `/checkpoint`
   - `/rollback` restore it (index + worktree, HEAD untouched).
 - **Sub-agent** — `task` tool spawns an ephemeral Agent; only its summary enters context.
@@ -92,14 +104,23 @@ ringzero --verbose "..."        # verbose logging
 
 `Enter` submit · `↑/↓` input history · `PgUp/PgDn` or **mouse wheel** scroll ·
 `Ctrl+P/L` model dialog / cycle favorites (`RINGZERO_MODELS`) · `Ctrl+K` command palette ·
-`Ctrl+O` or **mouse click** expand/collapse tool output · `Ctrl+A/E` line start/end ·
+`Ctrl+O` or **mouse click** expand/collapse tool output · `Ctrl+T` toggle the todo list ·
+`Ctrl+A/E` line start/end ·
 `Ctrl+U` clear line · `Ctrl+W` delete word · `Ctrl+C` abort run / exit.
 Permission prompts appear as an inline modal: `y` yes · `n` no · `a` always · `v` never.
 Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 
 ### Slash commands (REPL & TUI)
 
-`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /new  /exit`
+`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /new  /exit`
+
+### Plan mode
+
+`/plan` (or `RINGZERO_PLAN_MODE=1`) puts the agent in plan mode: only read-only
+tools (`read_file`, `grep`, `glob`, `git_status`, `git_diff`, `web_fetch`) are
+allowed until the agent presents a plan with the `plan` tool and you approve it.
+Once approved, the rest of the turn runs without further permission prompts.
+Rejected plans keep the gate closed — the agent must revise and re-present.
 
 ### Checkpoints & rollback
 
@@ -171,6 +192,9 @@ echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}'
 | `RINGZERO_SESSIONS`                     | `<home>/sessions` | session store dir                                                                                     |
 | `RINGZERO_WORKSPACE`                    | —                 | lock fs tools (read/write/edit/grep/glob) to this root; paths outside are rejected                    |
 | `RINGZERO_VERIFY`                       | —                 | shell command run after the first write/edit of a run; output fed back to the model (e.g. `npm test`) |
+| `RINGZERO_PLAN_MODE`                    | `0`               | start with plan mode on (`1`/`true`)                                                                  |
+| `RINGZERO_ALLOW_PRIVATE_NET`            | `0`               | `1` disables the `web_fetch` SSRF guard (not recommended)                                             |
+| `RINGZERO_BASH_FULL_ENV`                | `0`               | `1` passes the full environment to bash children (secrets are stripped by default)                    |
 
 ### Workspace sandbox
 
@@ -182,9 +206,9 @@ attempts to touch anything outside it are rejected instead of executed.
 
 ```
 src/
-  kernel/      types, tokenizer, agent loop, context/compaction, truncate
+  kernel/      types, tokenizer, agent loop, context/compaction, truncate, redact
   providers/   provider interface, openai-compat, anthropic, SSE, registry
-  tools/       fs, search, bash, web, task (sub-agent)
+  tools/       fs, search, bash, web, plan, todo, task (sub-agent)
   mcp/         client, stdio+http transports, config, tool bridge
   session/     JSONL store
   permission/  gate

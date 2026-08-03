@@ -93,7 +93,7 @@ async function handleSlash(
   switch (cmd) {
     case 'help':
       console.log(
-        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /new  /exit',
+        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /new  /exit',
       );
       break;
     case 'usage':
@@ -199,6 +199,26 @@ async function handleSlash(
     case 'rollback': {
       const sha = runner.rollback();
       console.log(sha ? `rolled back to ${sha.slice(0, 8)}` : '(no checkpoints for this session)');
+      break;
+    }
+    case 'plan': {
+      const arg = rest[0];
+      const on = arg === undefined ? !runner.isPlanMode() : arg === 'on';
+      if (arg !== undefined && arg !== 'on' && arg !== 'off') {
+        console.log('usage: /plan [on|off]');
+        break;
+      }
+      runner.setPlanMode(on);
+      console.log(`plan mode ${on ? 'ON' : 'OFF'}`);
+      break;
+    }
+    case 'todos': {
+      const todos = runner.listTodos();
+      console.log(
+        todos.length
+          ? todos.map((t, i) => `${i + 1}. ${t.done ? '[x]' : '[ ]'} ${t.text}`).join('\n')
+          : '(no todos)',
+      );
       break;
     }
     default:

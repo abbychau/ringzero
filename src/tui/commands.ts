@@ -22,7 +22,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   switch (cmd) {
     case 'help':
       pushSys(
-        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /checkpoint /rollback /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+J/Shift+Enter newline',
+        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /checkpoint /rollback /plan [on|off] /todos /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
       );
       break;
     case 'usage': {
@@ -152,6 +152,34 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
     case 'rollback': {
       const sha = r.rollback();
       pushSys(sha ? `rolled back to ${sha.slice(0, 8)}` : '(no checkpoints for this session)');
+      break;
+    }
+    case 'plan': {
+      const arg = rest[0];
+      const on = arg === undefined ? !r.isPlanMode() : arg === 'on';
+      if (arg !== undefined && arg !== 'on' && arg !== 'off') {
+        pushSys('usage: /plan [on|off]');
+        break;
+      }
+      r.setPlanMode(on);
+      deps.dispatch({ type: 'setPlanMode', planMode: on });
+      pushSys(
+        `plan mode ${on ? 'ON' : 'OFF'}` +
+          (on ? ' — next turn plans before changing anything' : ''),
+      );
+      break;
+    }
+    case 'todos': {
+      const todos = r.listTodos();
+      if (todos.length) {
+        deps.dispatch({ type: 'setTodos', todos });
+        deps.dispatch({ type: 'toggleTodos' });
+        pushSys(todos.map((t, i) => `${i + 1}. ${t.done ? '[x]' : '[ ]'} ${t.text}`).join('\n'));
+      } else {
+        pushSys(
+          '(no todos)' + (r.isPlanMode() ? ' — plan mode is on, ask the agent to plan first' : ''),
+        );
+      }
       break;
     }
     default:

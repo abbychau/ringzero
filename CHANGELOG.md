@@ -53,6 +53,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `onCompact` option on `Agent` (with a dedicated test).
 - Workspace sandbox section in the README and docs for the new environment
   variables.
+- Plan mode: `/plan [on|off]` + `RINGZERO_PLAN_MODE` gate the agent to
+  read-only tools until the user approves a plan presented via the new `plan`
+  tool; approved plans run without further permission prompts
+  (`src/tools/plan.ts`, kernel gate in `src/kernel/agent.ts`).
+- Todo list: `todo` tool (add/done/open/clear/list), persisted per session
+  under `~/.ringzero/todos/`, rendered as a collapsible TUI strip (`Ctrl+T`,
+  `/todos`) (`src/tools/todo.ts`, `src/cli/runner.ts`).
+- Secret redaction: `makeRedactor()` strips known env secret values and URL
+  credentials from tool results before they reach the model, the store, or the
+  UI (`src/kernel/redact.ts`).
+- SSRF guard for `web_fetch`: private/loopback/link-local/multicast/reserved
+  addresses (IPv4 + IPv6, incl. mapped/NAT64 forms) are blocked, including on
+  redirects; `RINGZERO_ALLOW_PRIVATE_NET=1` opts out (`src/tools/web.ts`).
+- Bash hardening: child processes get a sanitized env (secret-looking vars
+  dropped; `RINGZERO_BASH_FULL_ENV=1` to opt out) and `timeout_ms` is clamped
+  to 1s–10min (`src/tools/bash.ts`).
+- Tool efficiency: per-run result cache for pure tools (identical parallel
+  reads dedupe to one execution), `maxConcurrency` cap on parallel tool
+  execution, and tool definitions ordered by usage frequency to stabilize the
+  provider prompt cache (`src/kernel/agent.ts`).
 - `CHANGELOG.md`.
 
 ## [0.4.0]

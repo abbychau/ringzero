@@ -22,18 +22,18 @@ Status legend: `[ ]` planned · `[x]` done
 - [x] **P0.4 Post-tool verify loop** — `onToolAfter` plugin hook + optional
       `RINGZERO_VERIFY` command run after file edits with the result fed back
       into context (Aider/Codex `--fix` seed).
-- [ ] **P0.5 Security quick wins** — secret redaction in tool output/logs;
+- [x] **P0.5 Security quick wins** — secret redaction in tool output/logs;
       SSRF guard for `web_fetch` (block private/loopback/link-local IPs);
       cap `bash` timeout; optional env filtering for the shell.
-- [ ] **P0.6 Tool-call token optimization** — per-run tool result cache
+- [x] **P0.6 Tool-call token optimization** — per-run tool result cache
       (dedupe repeated `read_file`), `maxConcurrency` for parallel tools,
       tool definitions ordered by usage frequency to stabilize prompt cache.
 
 ## P1 — Core experience (2.0-level)
 
-- [ ] **P1.1 Plan mode** — agent thinks and proposes a plan; user approves
+- [x] **P1.1 Plan mode** — agent thinks and proposes a plan; user approves
       before execution.
-- [ ] **P1.2 Todo list (`/todos`)** — agent-maintained TODOs shown in the TUI.
+- [x] **P1.2 Todo list (`/todos`)** — agent-maintained TODOs shown in the TUI.
 - [ ] **P1.3 Multi-model routing** — `RINGZERO_COMPACT_MODEL` and
       `RINGZERO_SUBAGENT_MODEL` (cheap models for compaction/sub-agents, big model
       for the main loop).

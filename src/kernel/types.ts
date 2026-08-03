@@ -1,5 +1,9 @@
 /** Core shared types. Zero dependencies. */
 
+/** Outcome strings produced by the `plan` tool (kernel checks these). */
+export const PLAN_APPROVED = 'plan approved — proceed';
+export const PLAN_REJECTED = 'plan rejected — revise the plan and present it again';
+
 export type Role = 'system' | 'user' | 'assistant' | 'tool';
 
 /** A tool invocation produced by the model. args is raw JSON (may be partial during streaming). */

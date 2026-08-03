@@ -1,5 +1,6 @@
 /** Pure state + reducer for the Ink TUI (testable without a TTY). */
 import { wrapText, truncateWidth } from './term.js';
+import type { TodoItem } from '../tools/todo.js';
 
 export type Block =
   | { tag: 'user'; text: string }
@@ -60,6 +61,12 @@ export interface State {
   scroll: number;
   modal?: Modal;
   model: string;
+  /** Plan mode banner + gating (read-only until plan approved). */
+  planMode: boolean;
+  /** Per-session todo list (from Runner). */
+  todos: TodoItem[];
+  /** Collapsed strip (1 line) vs full list. */
+  todosExpanded: boolean;
 }
 
 export type Action =
@@ -77,10 +84,13 @@ export type Action =
   | { type: 'suggestIdx'; index: number }
   | { type: 'setModal'; modal?: Modal }
   | { type: 'setModel'; model: string }
+  | { type: 'setPlanMode'; planMode: boolean }
+  | { type: 'setTodos'; todos: TodoItem[] }
+  | { type: 'toggleTodos' }
   | { type: 'history'; index: number }
   | { type: 'clear' };
 
-export function initial(model: string): State {
+export function initial(model: string, planMode = false): State {
   return {
     blocks: [],
     input: '',
@@ -92,6 +102,9 @@ export function initial(model: string): State {
     status: 'ready',
     scroll: 0,
     model,
+    planMode,
+    todos: [],
+    todosExpanded: false,
   };
 }
 
@@ -181,6 +194,12 @@ export function reducer(s: State, a: Action): State {
       return { ...s, modal: a.modal };
     case 'setModel':
       return { ...s, model: a.model };
+    case 'setPlanMode':
+      return { ...s, planMode: a.planMode };
+    case 'setTodos':
+      return { ...s, todos: a.todos };
+    case 'toggleTodos':
+      return { ...s, todosExpanded: !s.todosExpanded };
     case 'submit': {
       const text = a.text.trim();
       const history =
@@ -266,6 +285,8 @@ export function slashCommands(): string[] {
     'status',
     'checkpoint',
     'rollback',
+    'plan',
+    'todos',
     'exit',
   ];
 }

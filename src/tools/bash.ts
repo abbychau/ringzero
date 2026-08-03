@@ -2,6 +2,21 @@ import { spawn } from 'node:child_process';
 import type { Tool } from '../kernel/types.js';
 
 const MAX_OUTPUT_CHARS = 100_000;
+const MAX_BASH_TIMEOUT = 600_000;
+const SECRET_KEY_RE = /(^|_)(key|token|secret|password|passwd|credential|auth)(_|$)/i;
+
+/**
+ * Environment for child processes with secrets removed, so the model cannot
+ * exfiltrate API keys via bash. Set RINGZERO_BASH_FULL_ENV=1 to opt out.
+ */
+export function sanitizeEnv(): Record<string, string | undefined> {
+  if (process.env.RINGZERO_BASH_FULL_ENV === '1') return { ...process.env };
+  const out: Record<string, string | undefined> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (!SECRET_KEY_RE.test(k)) out[k] = v;
+  }
+  return out;
+}
 
 export function bashTool(): Tool {
   return {
@@ -20,7 +35,10 @@ export function bashTool(): Tool {
     },
     async execute(input, ctx) {
       const command = String(input.command ?? '');
-      const timeout = Number(input.timeout_ms ?? 60_000);
+      const timeout = Math.min(
+        Math.max(1000, Number(input.timeout_ms ?? 60_000)),
+        MAX_BASH_TIMEOUT,
+      );
       if (!command) return 'error: empty command';
       const out = await runCommand(command, ctx.cwd, timeout, ctx.signal);
       return out.length > MAX_OUTPUT_CHARS
@@ -65,7 +83,7 @@ export function runCommand(
       shell: true,
       windowsHide: true,
       detached: !isWin,
-      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      env: { ...sanitizeEnv(), FORCE_COLOR: '0', NO_COLOR: '1' },
       signal,
     });
     let out = '';
