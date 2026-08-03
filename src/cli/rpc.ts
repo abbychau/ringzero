@@ -1,6 +1,7 @@
 import readline from 'node:readline';
 import type { AppConfig } from '../config/config.js';
 import type { TokenUsage } from '../kernel/types.js';
+import type { Agent } from '../kernel/agent.js';
 import { Runner } from './runner.js';
 
 /**
@@ -13,7 +14,11 @@ import { Runner } from './runner.js';
  *   model/get | model/set {model}     → { model }
  *   sessions/list                     → [{ id, title, updated }]
  *   sessions/resume {id}              → { sessionId }
- *   prompt {text}                     → { sessionId, text, usage }  (runs the agent)
+ *   prompt {text, notify?}            → { sessionId, text, usage }  (runs the agent)
+ *   prompt {text, interrupt: true}    → { injected }  (mid-run injection, bypasses the queue)
+ *
+ * Notifications (emitted when `notify` is set on prompt):
+ *   prompt/event {type, ...event}     → streamed agent events
  */
 export async function runRpc(config: AppConfig, opts: { model?: string } = {}): Promise<void> {
   const runner = new Runner(config, { model: opts.model, ask: async () => 'no' as const });
@@ -24,18 +29,9 @@ export async function runRpc(config: AppConfig, opts: { model?: string } = {}): 
   const send = (o: unknown): void => {
     process.stdout.write(JSON.stringify(o) + '\n');
   };
-
-  let queue: Promise<void> = Promise.resolve();
-
-  rl.on('line', (line) => {
-    if (!line.trim()) return;
-    queue = queue.then(() => handle(line).catch((e) => console.error(`[rpc] ${e}`)));
-  });
-
-  async function handle(line: string): Promise<void> {
-    const msg = parseRequest(line);
-    if (!msg) return;
-    const reply = (result?: unknown, error?: { code: number; message: string }): void => {
+  const replyFor =
+    (msg: RpcRequest) =>
+    (result?: unknown, error?: { code: number; message: string }): void => {
       if (msg.id === undefined) return;
       const o: {
         jsonrpc: '2.0';
@@ -50,6 +46,40 @@ export async function runRpc(config: AppConfig, opts: { model?: string } = {}): 
       else o.result = result;
       send(o);
     };
+
+  let queue: Promise<void> = Promise.resolve();
+  // The agent of the currently running prompt; cleared when it finishes.
+  let currentAgent: Agent | null = null;
+
+  rl.on('line', (line) => {
+    if (!line.trim()) return;
+    const msg = parseRequest(line);
+    // Mid-run injection must bypass the serial queue: the queue is blocked by
+    // the running prompt, so queuing would defer the interrupt until it ends.
+    if (msg?.method === 'prompt' && msg.params?.interrupt === true) {
+      void handleInterrupt(msg).catch((e) => console.error(`[rpc] ${e}`));
+      return;
+    }
+    queue = queue.then(() => handle(line).catch((e) => console.error(`[rpc] ${e}`)));
+  });
+
+  async function handleInterrupt(msg: RpcRequest): Promise<void> {
+    const reply = replyFor(msg);
+    if (!currentAgent) {
+      reply(undefined, { code: -32001, message: 'no prompt running' });
+      return;
+    }
+    if (typeof msg.params?.text !== 'string' || !msg.params.text.trim()) {
+      reply(undefined, { code: -32602, message: 'text required' });
+      return;
+    }
+    reply({ injected: currentAgent.inject(msg.params.text) });
+  }
+
+  async function handle(line: string): Promise<void> {
+    const msg = parseRequest(line);
+    if (!msg) return;
+    const reply = replyFor(msg);
     try {
       switch (msg.method) {
         case 'initialize':
@@ -89,11 +119,18 @@ export async function runRpc(config: AppConfig, opts: { model?: string } = {}): 
           runner.ensureSession();
           const sessionId = runner.sessionId!;
           const agent = runner.agent();
+          currentAgent = agent;
           let text = '';
           let usage: TokenUsage | undefined;
-          for await (const ev of agent.run(msg.params.text)) {
-            if (ev.type === 'text') text += ev.text;
-            else if (ev.type === 'finish') usage = ev.usage;
+          const notify = msg.params?.notify === true;
+          try {
+            for await (const ev of agent.run(msg.params.text)) {
+              if (notify) send({ jsonrpc: '2.0', method: 'prompt/event', params: { ...ev } });
+              if (ev.type === 'text') text += ev.text;
+              else if (ev.type === 'finish') usage = ev.usage;
+            }
+          } finally {
+            currentAgent = null;
           }
           reply({ sessionId, text, usage });
           break;

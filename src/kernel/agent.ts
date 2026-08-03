@@ -8,6 +8,7 @@ import type {
   ToolDefinition,
   TokenUsage,
   ProviderMessage,
+  ChatEvent,
 } from './types.js';
 import { PLAN_APPROVED } from './types.js';
 import { newId } from './id.js';
@@ -38,6 +39,9 @@ const CACHEABLE_TOOLS = new Set([
 
 export const PLAN_BLOCK_TEXT = 'plan mode: present a plan with the plan tool first';
 
+/** Sentinel for the stream-step race: an interrupt won over the model event. */
+const INTERRUPT = { interrupt: true as const };
+
 export type AgentEvent =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string }
@@ -45,6 +49,7 @@ export type AgentEvent =
   | { type: 'tool_result'; name: string; output: string; truncated: boolean }
   | { type: 'permission'; name: string; allowed: boolean }
   | { type: 'compacting' }
+  | { type: 'injected'; text: string }
   | { type: 'finish'; usage?: TokenUsage; steps: number };
 
 export interface AgentOptions {
@@ -119,6 +124,35 @@ export class Agent {
   private planApproved = false;
   /** Tool call counts per session, used to order tool definitions by usage. */
   private toolUsage = new Map<string, number>();
+  /** True while run() is active; gates inject(). */
+  private running = false;
+  /** User messages queued while a run is in progress. */
+  private interrupts: string[] = [];
+  /** Resolver for the in-flight streaming wait (single pending waiter). */
+  private interruptNotify: (() => void) | null = null;
+
+  /**
+   * Queue a user message into an active run. The running agent aborts the
+   * current stream, processes the injected message, then continues.
+   * Returns false when the agent is idle.
+   */
+  inject(text: string): boolean {
+    if (!this.running) return false;
+    this.interrupts.push(text);
+    this.interruptNotify?.();
+    return true;
+  }
+
+  /** Resolves immediately when an interrupt is queued, or fires on the next one. */
+  private waitForInterrupt(): Promise<boolean> {
+    if (this.interrupts.length > 0) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      this.interruptNotify = () => {
+        this.interruptNotify = null;
+        resolve(true);
+      };
+    });
+  }
 
   constructor(options: AgentOptions) {
     this.provider = options.provider;
@@ -140,6 +174,17 @@ export class Agent {
    * Yields events; `finish` is always the last event.
    */
   async *run(userText: string): AsyncGenerator<AgentEvent> {
+    this.running = true;
+    try {
+      yield* this.runInternal(userText);
+    } finally {
+      this.running = false;
+      this.interrupts.length = 0;
+      this.interruptNotify = null;
+    }
+  }
+
+  private async *runInternal(userText: string): AsyncGenerator<AgentEvent> {
     const emit = (e: AgentEvent) => {
       this.opts.onEvent?.(e);
       return e;
@@ -188,6 +233,14 @@ export class Agent {
     let steps = 0;
 
     while (steps < this.opts.maxSteps) {
+      // Mid-run injection: process queued user messages before the next model call.
+      if (this.interrupts.length > 0) {
+        for (const t of this.interrupts.splice(0)) {
+          push({ id: newId('msg'), role: 'user', content: t, ts: Date.now() });
+          yield emit({ type: 'injected', text: t });
+        }
+        continue;
+      }
       // Budget check → compact oldest messages, keep tail verbatim.
       if (this.opts.compact && history.length > 2) {
         const est = estimateContextTokens(this.provider, history, {
@@ -211,14 +264,39 @@ export class Agent {
       let text = '';
       let turnUsage: TokenUsage | undefined;
       let overflowTries = 0;
+      let interrupted = false;
       for (;;) {
+        const interruptAbort = new AbortController();
+        const signal = this.opts.signal
+          ? AbortSignal.any([this.opts.signal, interruptAbort.signal])
+          : interruptAbort.signal;
         try {
-          for await (const ev of this.provider.chat({
+          const it = this.provider.chat({
             system: this.opts.system,
             messages,
             tools: toolDefs,
-            signal: this.opts.signal,
-          })) {
+            signal,
+          });
+          // Manual iteration: race each stream step against mid-run injection so
+          // an injected message aborts the current model call immediately.
+          for (;;) {
+            const stepP = it.next();
+            const stepped: IteratorResult<ChatEvent> | typeof INTERRUPT = await Promise.race([
+              stepP,
+              this.waitForInterrupt().then(() => INTERRUPT),
+            ]);
+            if ('interrupt' in stepped) {
+              interrupted = true;
+              interruptAbort.abort();
+              try {
+                await stepP;
+              } catch {
+                // Aborted stream; nothing to salvage.
+              }
+              break;
+            }
+            if (stepped.done) break;
+            const ev = stepped.value;
             if (ev.type === 'text') {
               text += ev.text;
               yield emit({ type: 'text', text: ev.text });
@@ -234,6 +312,10 @@ export class Agent {
           }
           break;
         } catch (err) {
+          if (interrupted) break; // abort caused by our own injection
+          if (err instanceof Error && err.name === 'AbortError' && this.opts.signal?.aborted) {
+            throw err;
+          }
           const msg = err instanceof Error ? err.message : String(err);
           const isOverflow =
             this.opts.compact && overflowTries < 2 && /context|token|length|maximum/i.test(msg);
@@ -264,6 +346,7 @@ export class Agent {
         ts: Date.now(),
       });
 
+      if (interrupted) continue; // next iteration drains the injected messages
       if (calls.length === 0) break;
 
       // Phase 1 (sequential): resolve + authorize each call. Permission checks may

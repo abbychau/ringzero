@@ -4,6 +4,7 @@ import { Runner } from './runner.js';
 import { createDefaultProvider } from '../providers/registry.js';
 import type { AskResponse } from '../permission/gate.js';
 import type { TokenUsage } from '../kernel/types.js';
+import type { Agent } from '../kernel/agent.js';
 import { estimateCost, fmtCost } from '../kernel/cost.js';
 
 function makeAsk(rl: readline.Interface): (prompt: string) => Promise<AskResponse> {
@@ -35,6 +36,9 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
   const runner = new Runner(config, { model, sessionId: resume, ask: makeAsk(rl) });
   runner.pluginSay = (t) => console.log(t);
   let lastUsage: TokenUsage | undefined;
+  // The agent currently running, or null when idle. Typing while a run is in
+  // progress injects the line into the agent instead of starting a second run.
+  let runningAgent: Agent | null = null;
   const title = 'ringzero session';
   await runner.init();
 
@@ -46,6 +50,18 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
   rl.on('line', async (raw) => {
     const line = raw.trim();
     if (!line) {
+      rl.prompt();
+      return;
+    }
+    if (runningAgent) {
+      if (line.startsWith('/')) {
+        process.stdout.write('(agent is running — / commands wait until it finishes)\n');
+      } else {
+        runningAgent.inject(line);
+        process.stdout.write(
+          `[✂ injected mid-run: ${line.slice(0, 80)}${line.length > 80 ? '…' : ''}]\n`,
+        );
+      }
       rl.prompt();
       return;
     }
@@ -62,6 +78,7 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
     }
     runner.ensureSession(title);
     const agent = runner.agent();
+    runningAgent = agent;
     let usage: TokenUsage | undefined;
     try {
       for await (const ev of agent.run(line)) {
@@ -70,11 +87,13 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
         else if (ev.type === 'permission' && !ev.allowed)
           process.stdout.write(`[denied: ${ev.name}]\n`);
         else if (ev.type === 'compacting') process.stdout.write('\n[compacting context…]\n');
+        else if (ev.type === 'injected') process.stdout.write(`\n[✂ injected: ${ev.text}]\n`);
         else if (ev.type === 'finish') usage = ev.usage;
       }
     } catch (err) {
       process.stdout.write(`\n[error: ${err instanceof Error ? err.message : String(err)}]\n`);
     }
+    runningAgent = null;
     lastUsage = usage;
     if (usage)
       process.stdout.write(

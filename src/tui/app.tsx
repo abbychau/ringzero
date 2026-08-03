@@ -4,6 +4,7 @@ import { appendFileSync } from 'node:fs';
 import process from 'node:process';
 import type { AppConfig } from '../config/config.js';
 import { Runner } from '../cli/runner.js';
+import type { Agent } from '../kernel/agent.js';
 import {
   reducer,
   initial,
@@ -76,6 +77,7 @@ export function App({
   };
   const abortRef = useRef<AbortController | undefined>(undefined);
   const runningRef = useRef(false);
+  const agentRef = useRef<Agent | undefined>(undefined);
   const runnerRef = useRef(runner);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -129,6 +131,7 @@ export function App({
       const abort = new AbortController();
       abortRef.current = abort;
       const agent = runnerRef.current.agent(abort.signal);
+      agentRef.current = agent;
       let usage: Usage | undefined;
       let status = 'idle';
       try {
@@ -158,6 +161,7 @@ export function App({
         }
       }
       runningRef.current = false;
+      agentRef.current = undefined;
       abortRef.current = undefined;
       let ctx: number | undefined;
       try {
@@ -213,7 +217,18 @@ export function App({
 
   const submit = useCallback(
     (text: string) => {
-      if (runningRef.current) return;
+      if (runningRef.current) {
+        // Mid-run injection: queue the message into the active agent instead of
+        // dropping it. The agent aborts its current stream and continues.
+        const line = text.trim();
+        if (!line) return;
+        if (agentRef.current?.inject(line)) {
+          dispatch({ type: 'submit', text: line });
+          dispatch({ type: 'push', block: { tag: 'user', text: line } });
+          pushSys(`✂ injected mid-run: ${line.slice(0, 60)}${line.length > 60 ? '…' : ''}`);
+        }
+        return;
+      }
       const line = text.trim();
       dispatch({ type: 'submit', text: line });
       if (!line) return;
@@ -224,7 +239,7 @@ export function App({
       dispatch({ type: 'push', block: { tag: 'user', text: line } });
       void runTurn(line);
     },
-    [runCommand, runTurn],
+    [runCommand, runTurn, pushSys],
   );
 
   const paletteItems = useCallback(

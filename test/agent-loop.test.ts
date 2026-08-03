@@ -183,6 +183,59 @@ test('runaway tool loop stops at maxSteps', async () => {
   assert.equal(events.filter((e) => e.type === 'tool_result').length, 3);
 });
 
+test('mid-run injection aborts the stream, queues the message, and continues', async () => {
+  // First call: stream one text chunk, then stall until the agent aborts us
+  // (real providers behave this way when their fetch is aborted).
+  let firstCall = true;
+  const provider: Provider = {
+    id: 'stall',
+    countTokens: (t) => countTokens(t),
+    async *chat(req) {
+      if (firstCall) {
+        firstCall = false;
+        yield { type: 'text', text: 'first ' };
+        await new Promise<void>((resolve) => {
+          req.signal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+        throw new Error('aborted by signal');
+      }
+      // Second call: report how many user messages the agent now sees.
+      const users = req.messages.filter((m) => m.role === 'user').length;
+      yield { type: 'text', text: `users=${users}` };
+      yield { type: 'finish', usage: { input: 10, output: 10 } };
+    },
+  };
+  const agent = new Agent({ provider, tools: [add], permission: allowAll });
+  const events: AgentEvent[] = [];
+  const iter = agent.run('hello');
+  for await (const ev of iter) {
+    events.push(ev);
+    // Inject while the provider is stalled mid-stream.
+    if (ev.type === 'text' && ev.text === 'first ') {
+      assert.equal(agent.inject('stop now'), true);
+    }
+  }
+  assert.ok(
+    events.some((e) => e.type === 'injected' && e.text === 'stop now'),
+    'injected event',
+  );
+  // The second model call saw both user messages (original + injected).
+  assert.ok(
+    events.some((e) => e.type === 'text' && e.text === 'users=2'),
+    'agent continued',
+  );
+  assert.equal(events[events.length - 1]!.type, 'finish');
+});
+
+test('inject returns false when the agent is idle', () => {
+  const agent = new Agent({
+    provider: scriptedProvider(() => ({ text: 'ok' })),
+    tools: [],
+    permission: allowAll,
+  });
+  assert.equal(agent.inject('x'), false);
+});
+
 test('permission-denied tool result is fed back to the model', async () => {
   const gate = new PermissionGate({ rules: { write: 'deny' }, ask: async () => 'no' as const });
   const provider = scriptedProvider((msgs) => {
