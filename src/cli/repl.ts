@@ -1,0 +1,191 @@
+import readline from 'node:readline';
+import type { AppConfig } from '../config/config.js';
+import { Runner } from './runner.js';
+import { createDefaultProvider } from '../providers/registry.js';
+import type { AskResponse } from '../permission/gate.js';
+import type { TokenUsage } from '../kernel/types.js';
+
+function makeAsk(rl: readline.Interface): (prompt: string) => Promise<AskResponse> {
+  return (prompt: string) =>
+    new Promise((res) => {
+      rl.question(`${prompt}\n[y]es / [n]o / [a]lways / ne[v]er > `, (ans) => {
+        const a = ans.trim().toLowerCase();
+        if (a.startsWith('y')) res('yes');
+        else if (a.startsWith('a')) res('always');
+        else if (a.startsWith('v') || a.startsWith('n')) res('never');
+        else res('no');
+      });
+    });
+}
+
+function fmtUsage(u?: TokenUsage): string {
+  if (!u) return 'no usage data';
+  return `in=${u.input} out=${u.output}${u.cacheRead ? ` cached=${u.cacheRead}` : ''}${
+    u.cacheWrite ? ` cacheWrite=${u.cacheWrite}` : ''
+  }`;
+}
+
+export async function runRepl(config: AppConfig, model?: string, resume?: string): Promise<void> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: 'ringzero> ',
+  });
+  const runner = new Runner(config, { model, sessionId: resume, ask: makeAsk(rl) });
+  runner.pluginSay = (t) => console.log(t);
+  let lastUsage: TokenUsage | undefined;
+  const title = 'ringzero session';
+  await runner.init();
+
+  console.log(
+    `RingZero — model=${runner.model} provider=${createDefaultProvider({ ...config.env, model: runner.model }).id} — /help for commands`,
+  );
+  rl.prompt();
+
+  rl.on('line', async (raw) => {
+    const line = raw.trim();
+    if (!line) {
+      rl.prompt();
+      return;
+    }
+    if (line.startsWith('/')) {
+      await handleSlash(
+        runner,
+        rl,
+        line,
+        () => lastUsage,
+        (u) => (lastUsage = u),
+      );
+      rl.prompt();
+      return;
+    }
+    runner.ensureSession(title);
+    const agent = runner.agent();
+    let usage: TokenUsage | undefined;
+    try {
+      for await (const ev of agent.run(line)) {
+        if (ev.type === 'text') process.stdout.write(ev.text);
+        else if (ev.type === 'tool_start') process.stdout.write(`\n⛏ ${ev.name}\n`);
+        else if (ev.type === 'permission' && !ev.allowed)
+          process.stdout.write(`[denied: ${ev.name}]\n`);
+        else if (ev.type === 'compacting') process.stdout.write('\n[compacting context…]\n');
+        else if (ev.type === 'finish') usage = ev.usage;
+      }
+    } catch (err) {
+      process.stdout.write(`\n[error: ${err instanceof Error ? err.message : String(err)}]\n`);
+    }
+    lastUsage = usage;
+    if (usage) process.stdout.write(`\n[usage ${fmtUsage(usage)}]\n`);
+    rl.prompt();
+  });
+
+  rl.on('close', () => process.exit(0));
+}
+
+async function handleSlash(
+  runner: Runner,
+  rl: readline.Interface,
+  line: string,
+  getUsage: () => TokenUsage | undefined,
+  setUsage: (u: TokenUsage) => void,
+): Promise<void> {
+  const [cmd, ...rest] = line.slice(1).split(/\s+/);
+  switch (cmd) {
+    case 'help':
+      console.log(
+        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /new  /exit',
+      );
+      break;
+    case 'usage':
+      console.log(`usage: ${fmtUsage(getUsage())}`);
+      break;
+    case 'compact': {
+      const res = await runner.compact();
+      if (!res) console.log('(nothing to compact)');
+      else
+        console.log(
+          `compact: ${res.replaced} msg(s) → summary · ${res.before} → ${res.after} tokens`,
+        );
+      break;
+    }
+    case 'model': {
+      if (rest[0]) {
+        runner.setModel(rest[0]);
+        console.log(`model → ${rest[0]}`);
+      } else {
+        console.log(`model = ${runner.model}`);
+      }
+      break;
+    }
+    case 'permission': {
+      if (rest.length === 2 && ['allow', 'ask', 'deny'].includes(rest[1]!)) {
+        runner.gate.setOverride(rest[0]!, rest[1] as 'allow' | 'ask' | 'deny');
+        console.log(`${rest[0]} → ${rest[1]}`);
+      } else {
+        console.log('usage: /permission <tool> <allow|ask|deny>');
+      }
+      break;
+    }
+    case 'tools':
+      console.log(
+        runner
+          .agent()
+          .toolDefs.map((t) => t.name)
+          .join(', '),
+      );
+      break;
+    case 'skills': {
+      if (rest[0]) {
+        if (rest[0] === 'off' && rest[1]) {
+          runner.disableSkill(rest[1]);
+          console.log(`skill disabled: ${rest[1]}`);
+        } else if (await runner.enableSkill(rest[0])) {
+          console.log(`skill enabled: ${rest[0]}`);
+        } else {
+          console.log(`skill not found: ${rest[0]}`);
+        }
+      } else {
+        const all = runner.listSkills();
+        console.log(
+          all.length
+            ? all
+                .map((s) => `${s.name} — ${s.description}${runner.hasSkill(s.name) ? ' [on]' : ''}`)
+                .join('\n')
+            : '(no skills found — create <dir>/skills/<name>/SKILL.md)',
+        );
+      }
+      break;
+    }
+    case 'sessions': {
+      const list = runner.listSessions();
+      if (!list.length) {
+        console.log('(no sessions)');
+        break;
+      }
+      for (const s of list.slice(0, 20)) {
+        const when = new Date(s.updated).toISOString().slice(0, 19).replace('T', ' ');
+        console.log(`${s.id}  ${when}  ${s.title}`);
+      }
+      break;
+    }
+    case 'resume': {
+      if (rest[0] && runner.resume(rest[0])) {
+        console.log(`resumed session ${rest[0]}`);
+      } else {
+        console.log('usage: /resume <sessionId>  (see /sessions)');
+      }
+      break;
+    }
+    case 'new':
+      runner.reset();
+      console.log('new session');
+      break;
+    case 'exit':
+      rl.close();
+      break;
+    default:
+      if (cmd && (await runner.runPluginCommand(cmd, rest))) break;
+      console.log(`unknown command: /${cmd}`);
+  }
+  void setUsage;
+}

@@ -1,0 +1,18 @@
+import type { Tool } from '../kernel/types.js';
+import { readFileTool, writeFileTool, editFileTool } from './fs.js';
+import { grepTool, globTool } from './search.js';
+import { bashTool } from './bash.js';
+import { webFetchTool } from './web.js';
+
+/** Default built-in toolset. Later phases add task (sub-agent) and mcp. */
+export function defaultTools(): Tool[] {
+  return [
+    readFileTool(),
+    writeFileTool(),
+    editFileTool(),
+    grepTool(),
+    globTool(),
+    bashTool(),
+    webFetchTool(),
+  ];
+}

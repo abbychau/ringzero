@@ -1,0 +1,61 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "npm run build",
+      "group": "build"
+    },
+    {
+      "label": "typecheck",
+      "type": "shell",
+      "command": "npm run typecheck",
+      "group": "build"
+    },
+    {
+      "label": "test",
+      "type": "shell",
+      "command": "npm test",
+      "group": "test"
+    },
+    {
+      "label": "format",
+      "type": "shell",
+      "command": "npm run format",
+      "group": "build"
+    },
+    {
+      "label": "smoke",
+      "type": "shell",
+      "command": "npm run smoke",
+      "group": "test"
+    },
+    {
+      "label": "e2e",
+      "type": "shell",
+      "command": "npm run e2e",
+      "group": "test"
+    },
+    {
+      "label": "launch TUI",
+      "type": "shell",
+      "command": "node dist/src/cli/index.js",
+      "dependsOn": "build",
+      "problemMatcher": [],
+      "group": "test"
+    },
+    {
+      "label": "rpc smoke",
+      "type": "shell",
+      "command": "node scripts/rpc-smoke.mjs",
+      "group": "test"
+    },
+    {
+      "label": "compact smoke",
+      "type": "shell",
+      "command": "node scripts/compact-smoke.mjs",
+      "group": "test"
+    }
+  ]
+}
