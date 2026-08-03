@@ -9,6 +9,7 @@ Usage:
   ringzero                      interactive TUI
   ringzero --repl               line-based REPL (fallback if no TTY)
   ringzero "prompt"             one-shot run
+  ringzero --watch "prompt"     re-run the prompt on file changes (use --yes for writes)
   ringzero --json "prompt"      one-shot, NDJSON event stream
   ringzero --resume <id> "..."  continue a session
   ringzero --sessions           list saved sessions
@@ -43,6 +44,7 @@ let version = false;
 let cont = false;
 let rpc = false;
 let tui = true;
+let watch = false;
 const positionals: string[] = [];
 const imagePaths: string[] = [];
 
@@ -55,6 +57,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--sessions') listSessions = true;
   else if (a === '--continue') cont = true;
   else if (a === '--rpc') rpc = true;
+  else if (a === '--watch') watch = true;
   else if (a === '--verbose') process.env.RINGZERO_VERBOSE = '1';
   else if (a === '--image') imagePaths.push(args[++i] ?? '');
   else if (a === '--version' || a === '-v') version = true;
@@ -108,7 +111,12 @@ const images =
 
 try {
   if (prompt) {
-    await runOneShot(config, prompt, { resume, yes, model, json, images });
+    if (watch) {
+      const { runWatch } = await import('./watch.js');
+      await runWatch(config, prompt, { model, yes });
+    } else {
+      await runOneShot(config, prompt, { resume, yes, model, json, images });
+    }
   } else if (rpc) {
     const { runRpc } = await import('./rpc.js');
     await runRpc(config, { model });
