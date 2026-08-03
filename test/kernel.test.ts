@@ -80,3 +80,65 @@ test('estimateContextTokens counts system + tools + messages', () => {
   );
   assert.ok(total > 0);
 });
+
+test('compactHistory sends structured prompt, omits tool-call args', async () => {
+  const seen: any[] = [];
+  const provider: Provider = {
+    id: 'capture',
+    countTokens: (t) => countTokens(t),
+    async *chat(req) {
+      seen.push(req);
+      yield { type: 'text', text: 'SUMMARY' };
+      yield { type: 'finish', usage: { input: 10, output: 10 } };
+    },
+  };
+  const mk = (i: number): SessionMessage => ({
+    id: `m${i}`,
+    role: i === 0 ? 'user' : 'assistant',
+    content: 'y'.repeat(400), // ~100 tokens each
+    ts: i,
+    toolCalls:
+      i % 2 === 0
+        ? [
+            {
+              id: `c${i}`,
+              name: 'read_file',
+              args: '{"path":"/very/long/path/' + 'a'.repeat(200) + '"}',
+            },
+          ]
+        : undefined,
+  });
+  const history = Array.from({ length: 16 }, (_, i) => mk(i));
+  await compactHistory(provider, history, {
+    preserveRecentTokens: 200,
+    budgetTokens: 10_000,
+  });
+  assert.ok(seen.length >= 1);
+  const req = seen[0]!;
+  const last = req.messages[req.messages.length - 1];
+  assert.ok(typeof last?.content === 'string');
+  for (const h of ['# Goals', '# Decisions', '# Files', '# Errors', '# Unfinished']) {
+    assert.ok(last!.content.includes(h), `prompt lacks ${h}`);
+  }
+  // Tool-call arguments must not be sent to the summarizer.
+  for (const m of req.messages) {
+    assert.equal(m.toolCalls, undefined, 'toolCalls leaked into summarize request');
+  }
+});
+
+test('compactHistory folds incrementally when budget is tight', async () => {
+  const mk = (i: number): SessionMessage => ({
+    id: `m${i}`,
+    role: i === 0 ? 'user' : 'assistant',
+    content: 'x'.repeat(500), // ~125 tokens each
+    ts: i,
+  });
+  const history = Array.from({ length: 20 }, (_, i) => mk(i));
+  // Budget below the preserved tail (500t) forces repeated folding passes.
+  const result = await compactHistory(fakeProvider, history, {
+    preserveRecentTokens: 500,
+    budgetTokens: 400,
+  });
+  assert.ok(result.passes >= 2, `expected incremental folding, got ${result.passes} pass`);
+  assert.ok(result.messages[0]!.content.includes('FAKE SUMMARY'));
+});

@@ -20,12 +20,19 @@ export interface TokenUsage {
   cacheWrite?: number;
 }
 
+/** An inline image (base64 data) attached to a user message. */
+export interface ImageInput {
+  mime: string;
+  data: string;
+}
+
 /** Provider-agnostic message. Adapters convert to their protocol shape. */
 export interface ProviderMessage {
   role: Role;
   content: string;
   toolCalls?: ToolCall[];
   toolCallId?: string;
+  images?: ImageInput[];
 }
 
 /** Tool definition advertised to the model (inputSchema is a JSON Schema object). */
@@ -84,6 +91,7 @@ export interface SessionMessage {
   toolCallId?: string;
   toolName?: string;
   toolCalls?: ToolCall[];
+  images?: ImageInput[];
   usage?: TokenUsage;
   ts: number;
 }
