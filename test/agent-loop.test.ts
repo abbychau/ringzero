@@ -693,6 +693,83 @@ test('sub-agents: a failing subtask surfaces its error to the parent', async () 
   }
 });
 
+test('sub-agents: batch mode runs N tasks in parallel and merges results', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'rz-batch-'));
+  try {
+    let active = 0;
+    let maxActive = 0;
+    const slowRead: Tool = {
+      definition: {
+        name: 'slow_read',
+        description: 'slow read',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      execute: async () => {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((r) => setTimeout(r, 30));
+        active--;
+        return 'read-ok';
+      },
+    };
+    const provider = scriptedByRole((req) => {
+      const isSub = req.system?.some((s) => s.includes('sub-agent')) ?? false;
+      const msgs = req.messages;
+      const toolMsgs = msgs.filter((m) => m.role === 'tool');
+      if (isSub) {
+        if (toolMsgs.length === 0) return { calls: [{ name: 'slow_read', args: {} }] };
+        return { text: `summary(${toolMsgs.length})` };
+      }
+      if (toolMsgs.length === 0)
+        return { calls: [{ name: 'task', args: { tasks: ['probe a', 'probe b'] } }] };
+      return { text: `parent got: ${toolMsgs[toolMsgs.length - 1]!.content}` };
+    });
+    const taskTool = createTaskTool({
+      provider,
+      permission: allowAll,
+      cwd: tmp,
+      home: tmpdir(),
+      tools: [slowRead],
+    });
+    const agent = new Agent({ provider, tools: [taskTool], permission: allowAll, cwd: tmp });
+    const { finalText } = await run(agent, 'fan out two probes');
+    assert.ok(finalText.includes('### Task 1: probe a'), `got: ${finalText}`);
+    assert.ok(finalText.includes('### Task 2: probe b'), `got: ${finalText}`);
+    assert.ok(finalText.includes('summary(1)'), `got: ${finalText}`);
+    assert.equal(maxActive, 2, `expected 2 parallel sub-agents, saw max ${maxActive}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('sub-agents: batch mode isolates a failing task from the rest', async () => {
+  const tmp = mkdtempSync(join(tmpdir(), 'rz-batchfail-'));
+  try {
+    const provider = scriptedByRole((req) => {
+      const isSub = req.system?.some((s) => s.includes('sub-agent')) ?? false;
+      const msgs = req.messages;
+      const toolMsgs = msgs.filter((m) => m.role === 'tool');
+      if (isSub) {
+        const task = msgs.find((m) => m.role === 'user')?.content ?? '';
+        if (task.includes('boom')) throw new Error('kaboom');
+        return { text: `ok: ${task}` };
+      }
+      if (toolMsgs.length === 0)
+        return {
+          calls: [{ name: 'task', args: { tasks: ['boom task', 'fine task'] } }],
+        };
+      return { text: `parent saw: ${toolMsgs[toolMsgs.length - 1]!.content}` };
+    });
+    const taskTool = createTaskTool({ provider, permission: allowAll, cwd: tmp, home: tmpdir() });
+    const agent = new Agent({ provider, tools: [taskTool], permission: allowAll, cwd: tmp });
+    const { finalText } = await run(agent, 'fan out with one failing task');
+    assert.ok(finalText.includes('error: kaboom'), `got: ${finalText}`);
+    assert.ok(finalText.includes('ok: fine task'), `got: ${finalText}`);
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('plan mode: mutating tools are blocked until the user approves a plan', async () => {
   const plan = planTool();
   let writes = 0;

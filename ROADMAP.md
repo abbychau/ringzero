@@ -34,9 +34,9 @@ Status legend: `[ ]` planned · `[x]` done
 - [x] **P1.1 Plan mode** — agent thinks and proposes a plan; user approves
       before execution.
 - [x] **P1.2 Todo list (`/todos`)** — agent-maintained TODOs shown in the TUI.
-- [ ] **P1.3 Multi-model routing** — `RINGZERO_COMPACT_MODEL` and
-      `RINGZERO_SUBAGENT_MODEL` (cheap models for compaction/sub-agents, big model
-      for the main loop).
+- ~~**P1.3 Multi-model routing**~~ — rejected by design: compaction,
+  sub-agents, and the main loop all use the same model (simpler,
+  predictable, one API key).
 - [ ] **P1.4 Compaction 2.0** — structured summary template (goals/decisions/
       files/errors/unfinished), keep tool-call args out of the summarize prompt,
       incremental compaction, carry the previous summary forward.
@@ -50,7 +50,7 @@ Status legend: `[ ]` planned · `[x]` done
 
 - [ ] **P2.1 Symbol index + related-files** — ctags-style zero-dep index;
       `related_files` tool ("changing A means checking B").
-- [ ] **P2.2 Parallel research fan-out** — `task` batch mode: N sub-agents in
+- [x] **P2.2 Parallel research fan-out** — `task` batch mode: N sub-agents in
       parallel, merged results.
 - [ ] **P2.3 Automatic verify loop** — edit → verify → fix → rerun (built on
       P0.4).

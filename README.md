@@ -34,7 +34,10 @@ disclosure (skills), and ephemeral sub-agents.
   stabilize the provider prompt cache.
 - **Checkpoints** — auto-snapshot of the worktree before each run; `/checkpoint`
   - `/rollback` restore it (index + worktree, HEAD untouched).
-- **Sub-agent** — `task` tool spawns an ephemeral Agent; only its summary enters context.
+- **Sub-agent** — `task` tool spawns ephemeral Agents (same model as the main
+  loop — no multi-model routing); only their summaries enter context. Batch
+  mode: pass `tasks: [...]` to fan out N independent subtasks in parallel
+  (capped at 4), merged into one numbered report; a failing task is isolated.
 - **MCP** — stdio and streamable-HTTP transports; config via `RINGZERO_MCP` env or
   `.ringzero/mcp.json`.
 - **Skills** — on-demand SKILL.md injection appended after the stable system prefix

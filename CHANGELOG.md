@@ -73,6 +73,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reads dedupe to one execution), `maxConcurrency` cap on parallel tool
   execution, and tool definitions ordered by usage frequency to stabilize the
   provider prompt cache (`src/kernel/agent.ts`).
+- Parallel research fan-out: `task` batch mode — pass `tasks: [...]` to run N
+  sub-agents in parallel (capped, same model as the main loop) and get one
+  numbered merged report; a failing subtask is reported inline without killing
+  the batch. Sub-agents now also inherit the parent's abort signal
+  (`src/tools/task.ts`).
 - `CHANGELOG.md`.
 
 ## [0.4.0]
