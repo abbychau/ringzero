@@ -39,6 +39,7 @@ import {
   MouseParser,
   FilteredStdin,
   filterMouseSequences,
+  wheelDelta,
   SGR_MOUSE_ENABLE,
   SGR_MOUSE_DISABLE,
   type MouseEventData,
@@ -560,7 +561,7 @@ export function App({
       const inTranscript = lineIdx >= 0 && lineIdx < layoutRef.current.height;
       if (e.type === 'wheel') {
         if (!inTranscript) return;
-        const d = e.button === 64 ? 2 : e.button === 65 ? -2 : 0;
+        const d = wheelDelta(e.button);
         if (d) {
           dispatch({ type: 'scroll', delta: d });
           dispatch({ type: 'setTranscriptFocus', focus: true });

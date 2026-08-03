@@ -1,7 +1,21 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MouseParser, filterMouseSequences, FilteredStdin } from '../src/tui/mouse.js';
+import { MouseParser, filterMouseSequences, wheelDelta, FilteredStdin } from '../src/tui/mouse.js';
 import process from 'node:process';
+
+test('MouseParser normalizes wheel buttons to 0 (up) / 1 (down)', () => {
+  const p = new MouseParser();
+  const evs = p.push('\x1b[<64;3;4M\x1b[<65;3;4M');
+  assert.deepEqual(evs[0], { type: 'wheel', button: 0, x: 3, y: 4 });
+  assert.deepEqual(evs[1], { type: 'wheel', button: 1, x: 3, y: 4 });
+});
+
+test('wheelDelta maps normalized wheel buttons to scroll deltas', () => {
+  assert.equal(wheelDelta(0), 2); // wheel up → scroll back
+  assert.equal(wheelDelta(1), -2); // wheel down → scroll forward
+  assert.equal(wheelDelta(2), 0); // other buttons do not scroll
+  assert.equal(wheelDelta(64), 0); // raw codes must not be compared directly
+});
 
 test('MouseParser parses SGR left/right click and wheel', () => {
   const p = new MouseParser();

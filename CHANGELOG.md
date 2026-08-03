@@ -59,6 +59,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- TUI mouse wheel scrolling: the wheel handler compared the parser's
+  normalized button (0/1) against the raw SGR codes (64/65), so every wheel
+  event computed a zero delta and the transcript never scrolled. The mapping
+  now lives in `wheelDelta()` (`src/tui/mouse.ts`, `src/tui/app.tsx`).
 - TUI transcript focus: mouse wheel/click inside the transcript frame now lets
   ↑/↓ (and PgUp/PgDn) scroll it instead of hijacking input history; Esc or
   scrolling back to the bottom returns to the input. The status bar hints the

@@ -11,6 +11,14 @@ export const SGR_MOUSE_ENABLE = '\x1b[?1000;1006h';
 export const SGR_MOUSE_DISABLE = '\x1b[?1000;1006l';
 
 /**
+ * Scroll delta (rows) for a normalized wheel button: 0 = wheel up, 1 = wheel
+ * down. MouseParser normalizes raw SGR codes (64/65) to these values.
+ */
+export function wheelDelta(button: number): number {
+  return button === 0 ? 2 : button === 1 ? -2 : 0;
+}
+
+/**
  * Incremental mouse-sequence parser (SGR `ESC[<b;x;yM|m` + X10 `ESC[M`).
  * Pure and testable; feeds on raw latin1 chunks from stdin.
  */
