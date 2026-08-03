@@ -1,0 +1,46 @@
+{
+  "convos": [
+    {
+      "match": "research the codebase",
+      "sequences": [
+        {
+          "events": [
+            {
+              "type": "tool_calls",
+              "calls": [
+                {
+                  "id": "t1",
+                  "name": "task",
+                  "args": "{\"tasks\":[\"Task one: analyze modules\",\"Task two: check errors\"]}"
+                }
+              ]
+            }
+          ],
+          "usage": { "input": 5200, "output": 20 }
+        },
+        {
+          "events": [{ "type": "text", "text": "merged findings: summary A + summary B\n" }],
+          "usage": { "input": 5600, "output": 40 }
+        }
+      ]
+    },
+    {
+      "match": "Task one: analyze modules",
+      "sequences": [
+        {
+          "events": [{ "type": "text", "text": "summary A: modules are well-structured.\n" }],
+          "usage": { "input": 1100, "output": 20 }
+        }
+      ]
+    },
+    {
+      "match": "Task two: check errors",
+      "sequences": [
+        {
+          "events": [{ "type": "text", "text": "summary B: no blocking errors found.\n" }],
+          "usage": { "input": 1150, "output": 20 }
+        }
+      ]
+    }
+  ]
+}

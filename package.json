@@ -33,7 +33,8 @@
     "smoke": "npm run build && node dist/scripts/smoke.js",
     "smoke:agent": "npm run build && node dist/scripts/agent-smoke.js",
     "e2e": "npm run build && node dist/scripts/e2e-app.js",
-    "e2e:webapp": "npm run build && node dist/scripts/e2e-webapp.js"
+    "e2e:webapp": "npm run build && node dist/scripts/e2e-webapp.js",
+    "bench": "npm run build && node dist/scripts/bench.js"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

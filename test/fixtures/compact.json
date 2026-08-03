@@ -1,0 +1,373 @@
+{
+  "convos": [
+    {
+      "match": "summarize the full history",
+      "sequences": [
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p1", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 1300, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p2", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 1450, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p3", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 1600, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p4", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 1750, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p5", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 1900, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p6", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 2050, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p7", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 2200, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p8", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 2350, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p9", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 2500, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p10", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 2650, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p11", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 2800, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p12", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 2950, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p13", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 3100, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p14", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 3250, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p15", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 3400, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p16", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 3550, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p17", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 3700, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p18", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 3850, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p19", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 4000, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p20", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 4150, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p21", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 4300, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p22", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 4450, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p23", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 4600, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p24", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 4750, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p25", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 4900, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p26", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 5050, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p27", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 5200, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p28", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 5350, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p29", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 5500, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "p30", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 5650, "output": 8 }
+        }
+      ]
+    },
+    {
+      "match": "You are a context compactor",
+      "sequences": [
+        {
+          "events": [
+            {
+              "type": "text",
+              "text": "SUMMARY: the conversation repeatedly called nop with large results; goal is a long multi-step run that must stay within budget."
+            }
+          ],
+          "usage": { "input": 2100, "output": 30 }
+        },
+        {
+          "events": [
+            {
+              "type": "text",
+              "text": "SUMMARY (folding prior summary): still calling nop with large results; budget discipline is the point of the run."
+            }
+          ],
+          "usage": { "input": 2200, "output": 30 }
+        },
+        {
+          "events": [
+            {
+              "type": "text",
+              "text": "SUMMARY (folding prior summary): nop calls continue; earlier decisions preserved; run remains within budget."
+            }
+          ],
+          "usage": { "input": 2300, "output": 30 }
+        },
+        {
+          "events": [
+            {
+              "type": "text",
+              "text": "SUMMARY (folding prior summary): repeated nop calls with large results; compaction keeps the context flat."
+            }
+          ],
+          "usage": { "input": 2400, "output": 30 }
+        },
+        {
+          "events": [
+            {
+              "type": "text",
+              "text": "SUMMARY (folding prior summary): the run is almost done; decisions and results preserved in the fold."
+            }
+          ],
+          "usage": { "input": 2500, "output": 30 }
+        },
+        {
+          "events": [
+            {
+              "type": "text",
+              "text": "SUMMARY (folding prior summary): final fold; goal unchanged, all prior decisions intact."
+            }
+          ],
+          "usage": { "input": 2600, "output": 30 }
+        }
+      ]
+    },
+    {
+      "match": "[compacted summary of earlier conversation]",
+      "sequences": [
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q1", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 420, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q2", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 440, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q3", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 460, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q4", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 480, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q5", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 500, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q6", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 520, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q7", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 540, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q8", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 560, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q9", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 580, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q10", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 600, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q11", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 620, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q12", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 640, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q13", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 660, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q14", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 680, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q15", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 700, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q16", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 720, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q17", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 740, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q18", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 760, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q19", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 780, "output": 8 }
+        },
+        {
+          "events": [
+            { "type": "tool_calls", "calls": [{ "id": "q20", "name": "nop", "args": "{}" }] }
+          ],
+          "usage": { "input": 800, "output": 8 }
+        }
+      ]
+    }
+  ]
+}

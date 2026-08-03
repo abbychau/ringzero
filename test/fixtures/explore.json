@@ -1,0 +1,33 @@
+{
+  "convos": [
+    {
+      "match": "explore the project",
+      "sequences": [
+        {
+          "events": [
+            {
+              "type": "tool_calls",
+              "calls": [{ "id": "c1", "name": "glob", "args": "{\"pattern\":\"src/**/*.ts\"}" }]
+            }
+          ],
+          "usage": { "input": 4500, "output": 15 }
+        },
+        {
+          "events": [
+            {
+              "type": "tool_calls",
+              "calls": [{ "id": "c2", "name": "read_file", "args": "{\"path\":\"src/a.ts\"}" }]
+            }
+          ],
+          "usage": { "input": 4600, "output": 15 }
+        },
+        {
+          "events": [
+            { "type": "text", "text": "Found file src/a.ts: contains function helper.\n" }
+          ],
+          "usage": { "input": 4700, "output": 40 }
+        }
+      ]
+    }
+  ]
+}
