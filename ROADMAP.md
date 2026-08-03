@@ -89,16 +89,16 @@ token-efficient, zero-dep, CJK-first, UX/operability first.
 
 ## P4 — Operability & safety defaults (quick wins)
 
-- [ ] **P4.1 `--doctor` diagnostics** — `ringzero --doctor` checks the
+- [x] **P4.1 `--doctor` diagnostics** — `ringzero --doctor` checks the
       environment and prints actionable findings: Node ≥ 20.3
       (`AbortSignal.any`), TTY + terminal capabilities (SGR mouse 1006,
       alternate screen), provider key presence per provider, git availability,
       workspace/sandbox state, sessions dir writable, config summary.
       Zero-dep; exits non-zero on blocking issues.
-- [ ] **P4.2 Workspace auto-detect from git root** — when `RINGZERO_WORKSPACE`
+- [x] **P4.2 Workspace auto-detect from git root** — when `RINGZERO_WORKSPACE`
       is unset and the cwd is inside a git work tree, sandbox fs tools to the
       repo root instead of letting them roam the whole machine.
-- [ ] **P4.3 `git_commit` tool + `/commit [msg]`** — let the agent commit at
+- [x] **P4.3 `git_commit` tool + `/commit [msg]`** — let the agent commit at
       natural milestones; the model drafts the message and the user approves
       via the permission gate (default ask). Checkpoint/rollback stays the
       safety net.
