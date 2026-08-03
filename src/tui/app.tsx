@@ -20,6 +20,7 @@ import {
   type PaletteItem,
 } from './state.js';
 import { handleSlashCommand, type CommandDeps } from './commands.js';
+import { estimateCost, fmtCost } from '../kernel/cost.js';
 import {
   TranscriptRow,
   StatusBar,
@@ -164,7 +165,10 @@ export function App({
       } catch {
         /* ignore */
       }
-      const finalStatus = status === 'idle' && usage ? `idle · ${fmtUsage(usage)}` : status;
+      const finalStatus =
+        status === 'idle' && usage
+          ? `idle · ${fmtUsage(usage)} ≈${fmtCost(estimateCost(runnerRef.current.model, usage))}`
+          : status;
       dispatch({ type: 'runEnd', usage, status: finalStatus, ctx });
     },
     [pushSys],

@@ -47,6 +47,17 @@ test('StatusBar shows session total usage + cached', () => {
   assert.ok(f.includes('Σ in=4313 out=360 cached=3072'), `frame was: ${JSON.stringify(f)}`);
 });
 
+test('StatusBar appends the estimated cost for the session', () => {
+  const { lastFrame } = render(
+    <StatusBar
+      state={initial('deepseek-chat')}
+      session={{ input: 1_000_000, output: 100_000, cacheRead: 500_000 }}
+    />,
+  );
+  const f = stripAnsi(lastFrame()!);
+  assert.ok(f.includes('≈$0.415'), `frame was: ${JSON.stringify(f)}`);
+});
+
 test('ConfirmModal shows prompt and keys', () => {
   const { lastFrame } = render(<ConfirmModal prompt="allow bash?" />);
   const f = lastFrame()!;

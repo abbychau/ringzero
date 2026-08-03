@@ -5,6 +5,7 @@ import { bashTool } from './bash.js';
 import { webFetchTool } from './web.js';
 import { gitStatusTool, gitDiffTool } from './git.js';
 import { planTool } from './plan.js';
+import { relatedFilesTool } from './related.js';
 
 /** Default built-in toolset. Later phases add task (sub-agent) and mcp. */
 export function defaultTools(): Tool[] {
@@ -14,6 +15,7 @@ export function defaultTools(): Tool[] {
     editFileTool(),
     grepTool(),
     globTool(),
+    relatedFilesTool(),
     bashTool(),
     webFetchTool(),
     gitStatusTool(),

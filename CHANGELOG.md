@@ -79,6 +79,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the batch. Sub-agents now also inherit the parent's abort signal
   (`src/tools/task.ts`).
 - `CHANGELOG.md`.
+- Token/cost dashboard: zero-dep price table + estimator
+  (`src/kernel/cost.ts`) wired into the StatusBar (session cost), `/usage`
+  (cache hit rate + estimated cost, session and last turn), and the REPL
+  per-turn usage line.
+- Symbol index + `related_files` tool: zero-dep ctags-style index
+  (`src/tools/indexer.ts`) cached per workspace root with mtime invalidation;
+  `related_files` lists importers and same-symbol files for a target before
+  editing (`src/tools/related.ts`).
 
 ## [0.4.0]
 

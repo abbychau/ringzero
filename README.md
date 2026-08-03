@@ -19,8 +19,8 @@ disclosure (skills), and ephemeral sub-agents.
 - **Compaction** — auto-summarizes old messages near the context limit, keeps the
   tail verbatim (`RINGZERO_PRESERVE_RECENT`).
 - **Tools** — read (full / range / auto-outline for large files) / write / edit,
-  grep, glob, bash, web fetch, `git_status` / `git_diff`, `plan`, `todo`,
-  `task` (sub-agent), MCP.
+  grep, glob, `related_files` (importers + same-symbol files), bash, web
+  fetch, `git_status` / `git_diff`, `plan`, `todo`, `task` (sub-agent), MCP.
 - **Plan mode** — `/plan` gates the agent: only read-only tools run until it
   presents a plan via the `plan` tool and you approve it; approved plans run
   without further permission prompts.
@@ -46,6 +46,12 @@ disclosure (skills), and ephemeral sub-agents.
 - **Plugins** — single-file ESM plugins add tools, slash commands, and tool hooks.
 - **RPC/SDK** — `--rpc` JSON-RPC over stdin/stdout for embedding.
 - **Permission gate** — allow / ask / deny per tool, per-session overrides.
+- **Token/cost dashboard** — per-turn + session input/output/cache breakdown
+  with cache hit rate and an estimated cost from a built-in zero-dep price
+  table (StatusBar, `/usage`, per-turn status); tune `src/kernel/cost.ts`.
+- **Symbol index + `related_files`** — zero-dep ctags-style index
+  (`src/tools/indexer.ts`, cached with mtime invalidation); `related_files`
+  finds importers and files defining the same symbols before you edit.
 
 ## Install / build
 
@@ -116,6 +122,10 @@ Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 ### Slash commands (REPL & TUI)
 
 `/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /new  /exit`
+
+`/usage` shows the session token totals with cache hit rate and estimated cost
+(per-turn breakdown too); the StatusBar keeps a live cost estimate for the
+session, and each finished turn reports its own usage.
 
 ### Plan mode
 
@@ -211,7 +221,7 @@ attempts to touch anything outside it are rejected instead of executed.
 src/
   kernel/      types, tokenizer, agent loop, context/compaction, truncate, redact
   providers/   provider interface, openai-compat, anthropic, SSE, registry
-  tools/       fs, search, bash, web, plan, todo, task (sub-agent)
+  tools/       fs, search (grep/glob), indexer + related_files, bash, web, plan, todo, task (sub-agent)
   mcp/         client, stdio+http transports, config, tool bridge
   session/     JSONL store
   permission/  gate

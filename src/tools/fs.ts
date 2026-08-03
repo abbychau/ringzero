@@ -12,7 +12,7 @@ const OUTLINE_AUTO_LINES = 300;
  * Resolve a tool-supplied path against cwd, then (if a workspace root is
  * configured) reject paths outside it so fs tools can't touch arbitrary files.
  */
-function resolveFsPath(
+export function resolveFsPath(
   input: string,
   ctx: ToolContext,
 ): { ok: true; path: string } | { ok: false; error: string } {

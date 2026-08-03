@@ -1,6 +1,14 @@
 import type { Dispatch } from 'react';
 import type { Runner } from '../cli/runner.js';
-import { fmtSession, type Action, type AskResponse, type Option, type State } from './state.js';
+import {
+  fmtSession,
+  fmtUsage,
+  type Action,
+  type AskResponse,
+  type Option,
+  type State,
+} from './state.js';
+import { estimateCost, fmtCost, cacheHitRate } from '../kernel/cost.js';
 
 /** Everything handleSlashCommand needs from the App component. */
 export interface CommandDeps {
@@ -27,8 +35,16 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
       break;
     case 'usage': {
       const s = deps.getState();
-      if (s.totalUsage) pushSys(`session total: ${fmtSession(s.totalUsage)}`);
-      else pushSys('(no usage yet)');
+      if (s.totalUsage) {
+        const hit = cacheHitRate(s.totalUsage);
+        pushSys(
+          `session total: ${fmtSession(s.totalUsage)} · cache hit ${Math.round(hit * 100)}% · ≈${fmtCost(estimateCost(s.model, s.totalUsage))}`,
+        );
+        if (s.usage)
+          pushSys(`last turn: ${fmtUsage(s.usage)} ≈${fmtCost(estimateCost(s.model, s.usage))}`);
+      } else {
+        pushSys('(no usage yet)');
+      }
       break;
     }
     case 'model': {

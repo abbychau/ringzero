@@ -10,6 +10,7 @@ import {
   type State,
   type Usage,
 } from './state.js';
+import { estimateCost, fmtCost } from '../kernel/cost.js';
 
 const TAG_STYLE: Record<Block['tag'], { color?: string; bold?: boolean; dim?: boolean }> = {
   user: { color: 'cyan' },
@@ -52,7 +53,9 @@ export function StatusBar({
     state.ctxTokens !== undefined
       ? `  · ctx≈${(state.ctxTokens / 1000).toFixed(1)}k${budget ? `/${Math.round(budget / 1000)}k` : ''}`
       : '';
-  const ses = session ? `  · ${fmtSession(session)}` : '';
+  const ses = session
+    ? `  · ${fmtSession(session)} ≈${fmtCost(estimateCost(state.model, session))}`
+    : '';
   return (
     <Box>
       {state.running ? <Spinner /> : <Text dimColor>●</Text>}

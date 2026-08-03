@@ -40,7 +40,7 @@ Status legend: `[ ]` planned · `[x]` done
 - [ ] **P1.4 Compaction 2.0** — structured summary template (goals/decisions/
       files/errors/unfinished), keep tool-call args out of the summarize prompt,
       incremental compaction, carry the previous summary forward.
-- [ ] **P1.5 Token/cost dashboard** — per-turn input/output/cache breakdown,
+- [x] **P1.5 Token/cost dashboard** — per-turn input/output/cache breakdown,
       cache hit rate, estimated cost (built-in model price table, zero-dep).
 - [ ] **P1.6 Mid-run interruption** — pause → user injects a message → resume.
 - [ ] **P1.7 Gemini provider + vision** — Gemini API (free tier, CJK users);
@@ -48,7 +48,7 @@ Status legend: `[ ]` planned · `[x]` done
 
 ## P2 — Scale
 
-- [ ] **P2.1 Symbol index + related-files** — ctags-style zero-dep index;
+- [x] **P2.1 Symbol index + related-files** — ctags-style zero-dep index;
       `related_files` tool ("changing A means checking B").
 - [x] **P2.2 Parallel research fan-out** — `task` batch mode: N sub-agents in
       parallel, merged results.

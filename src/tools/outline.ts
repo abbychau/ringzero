@@ -76,6 +76,13 @@ export function extractOutline(text: string, ext?: string): OutlineSymbol[] {
 
 export const OUTLINE_MAX_SYMBOLS = 300;
 
+/** All file extensions the outline rules cover (used by the symbol index). */
+export function outlineExts(): string[] {
+  const set = new Set<string>();
+  for (const r of RULES) for (const e of r.exts) set.add(e);
+  return [...set];
+}
+
 /** Format an outline for the model (1 symbol per line, capped). */
 export function formatOutline(symbols: OutlineSymbol[]): string {
   const capped = symbols.slice(0, OUTLINE_MAX_SYMBOLS);

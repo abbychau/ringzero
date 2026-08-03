@@ -4,6 +4,7 @@ import { Runner } from './runner.js';
 import { createDefaultProvider } from '../providers/registry.js';
 import type { AskResponse } from '../permission/gate.js';
 import type { TokenUsage } from '../kernel/types.js';
+import { estimateCost, fmtCost } from '../kernel/cost.js';
 
 function makeAsk(rl: readline.Interface): (prompt: string) => Promise<AskResponse> {
   return (prompt: string) =>
@@ -75,7 +76,10 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
       process.stdout.write(`\n[error: ${err instanceof Error ? err.message : String(err)}]\n`);
     }
     lastUsage = usage;
-    if (usage) process.stdout.write(`\n[usage ${fmtUsage(usage)}]\n`);
+    if (usage)
+      process.stdout.write(
+        `\n[usage ${fmtUsage(usage)} ≈${fmtCost(estimateCost(runner.model, usage))}]\n`,
+      );
     rl.prompt();
   });
 
@@ -96,9 +100,15 @@ async function handleSlash(
         'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /new  /exit',
       );
       break;
-    case 'usage':
-      console.log(`usage: ${fmtUsage(getUsage())}`);
+    case 'usage': {
+      const u = getUsage();
+      console.log(
+        u
+          ? `usage: ${fmtUsage(u)} ≈${fmtCost(estimateCost(runner.model, u))}`
+          : 'usage: no usage data',
+      );
       break;
+    }
     case 'compact': {
       const res = await runner.compact();
       if (!res) console.log('(nothing to compact)');
