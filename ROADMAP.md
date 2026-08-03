@@ -78,3 +78,70 @@ reasoning (directly useful for DeepSeek-class models), git checkpoints
 (unlocks everything "let the agent change things"), verify loop (agent checks
 its own work). These four turn RingZero from a toy into a harness you can
 actually let loose on a repo.
+
+---
+
+# Phase 2 — 2026 roadmap
+
+Re-audited after the Phase 1 batches shipped (mouse scroll, transcript focus,
+CJK output decoding, `npm start`). Grounded in the same philosophy: minimal,
+token-efficient, zero-dep, CJK-first, UX/operability first.
+
+## P4 — Operability & safety defaults (quick wins)
+
+- [ ] **P4.1 `--doctor` diagnostics** — `ringzero --doctor` checks the
+      environment and prints actionable findings: Node ≥ 20.3
+      (`AbortSignal.any`), TTY + terminal capabilities (SGR mouse 1006,
+      alternate screen), provider key presence per provider, git availability,
+      workspace/sandbox state, sessions dir writable, config summary.
+      Zero-dep; exits non-zero on blocking issues.
+- [ ] **P4.2 Workspace auto-detect from git root** — when `RINGZERO_WORKSPACE`
+      is unset and the cwd is inside a git work tree, sandbox fs tools to the
+      repo root instead of letting them roam the whole machine.
+- [ ] **P4.3 `git_commit` tool + `/commit [msg]`** — let the agent commit at
+      natural milestones; the model drafts the message and the user approves
+      via the permission gate (default ask). Checkpoint/rollback stays the
+      safety net.
+
+## P5 — TUI experience (UX focus)
+
+- [ ] **P5.1 Context budget bar** — the StatusBar shows a color-coded token bar
+      (green <70%, yellow <90%, red beyond) next to the ctx≈ text, so
+      compaction pressure is visible at a glance.
+- [ ] **P5.2 `/retry`** — TUI + REPL re-run the last submitted prompt (new
+      agent turn, same session).
+- [ ] **P5.3 Input editing keys** — Ctrl+A / Ctrl+E (home/end) and
+      Ctrl+← / Ctrl+→ (word jumps) in the TUI input, matching shell muscle
+      memory.
+- [ ] **P5.4 Session management** — `/sessions` select gains rename (r) and
+      delete (d) actions; REPL `/sessions` shows ids and supports
+      `/sessions delete <id>`; RPC `sessions/rename` + `sessions/delete`;
+      store gains `renameSession` / `deleteSession`.
+- [ ] **P5.5 Auto session titles** — the first user message becomes the
+      session title (fallback to the current default), so `/sessions`,
+      `/export`, and `--sessions` show useful names.
+
+## P6 — Cost & research
+
+- [ ] **P6.1 Cost/token caps** — `RINGZERO_COST_CAP` (USD) and
+      `RINGZERO_TOKEN_CAP`: the agent exposes cumulative usage mid-run; the
+      TUI/REPL/RPC abort the run with a clear status when a cap is hit and
+      warn at 80%.
+- [ ] **P6.2 `web_search` tool** — opt-in search tool
+      (`RINGZERO_SEARCH_KEY` + `RINGZERO_SEARCH_ENDPOINT`, Tavily-compatible
+      JSON contract documented) registered only when configured; pairs with
+      the `task` fan-out for parallel research.
+
+## P7 — Platform & docs
+
+- [ ] **P7.1 MCP streamable-HTTP test coverage** — the transport already
+      exists (`src/mcp/transports.ts`); add an offline test with a local HTTP
+      server (JSON + SSE responses) so the `{url}` config path is verified on
+      CI.
+- [ ] **P7.2 Docs & polish** — README env table + command list for everything
+      above; CHANGELOG entries; roadmap markers flipped.
+
+## Suggested execution order (Phase 2)
+
+P4.1 → P4.2 → P4.3 (operability first) → P5.1 → P5.2 → P5.3 → P5.5 → P5.4 →
+P6.1 → P6.2 → P7.1 → P7.2
