@@ -26,6 +26,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "start": "npm run build && node dist/src/cli/index.js",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
