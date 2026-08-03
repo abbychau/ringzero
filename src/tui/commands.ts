@@ -30,7 +30,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   switch (cmd) {
     case 'help':
       pushSys(
-        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /checkpoint /rollback /plan [on|off] /todos /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
+        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
       );
       break;
     case 'usage': {
@@ -156,6 +156,16 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
     }
     case 'status': {
       pushSys(r.gitStatus());
+      break;
+    }
+    case 'commit': {
+      let msg = rest.join(' ').trim();
+      if (!msg) msg = (await deps.openInputModal('commit message:'))?.trim() ?? '';
+      if (!msg) {
+        pushSys('(cancelled)');
+        break;
+      }
+      pushSys(r.gitCommit(msg));
       break;
     }
     case 'checkpoint': {

@@ -166,8 +166,8 @@ test('slashMatches filters commands by prefix (and a lone slash shows all)', () 
   const all = slashMatches('/');
   assert.ok(all.includes('compact'));
   assert.ok(all.includes('exit'));
-  assert.deepEqual(slashMatches('/c'), ['context', 'compact', 'checkpoint']);
-  assert.deepEqual(slashMatches('/com'), ['compact']);
+  assert.deepEqual(slashMatches('/c'), ['context', 'compact', 'commit', 'checkpoint']);
+  assert.deepEqual(slashMatches('/com'), ['compact', 'commit']);
   // plan/todos are registered for autocomplete
   assert.deepEqual(slashMatches('/p'), ['permission', 'plan']);
   assert.deepEqual(slashMatches('/t'), ['todos']);

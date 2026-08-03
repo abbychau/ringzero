@@ -19,6 +19,7 @@ Usage:
   ringzero --yes "..."          auto-allow all tools (scripted mode)
   ringzero --image <path> "..." attach an image to the prompt (repeatable)
   ringzero --version            print version
+  ringzero --doctor             environment self-check (exit 1 on problems)
 
 TUI keys: Enter submit · PgUp/PgDn or mouse wheel scroll
          ↑/↓ history (transcript focus: ↑/↓ scroll · Esc returns to input)
@@ -29,6 +30,7 @@ Env (.env or environment):
   GEMINI_API_KEY, GEMINI_MODEL     Gemini (used when API_URL is empty)
   RINGZERO_CONTEXT_BUDGET          context budget for compaction (default 32000)
   RINGZERO_PRESERVE_RECENT         tail tokens kept verbatim across compaction
+  RINGZERO_WORKSPACE               fs sandbox root (default: git root; "off" disables)
 `;
 
 function printHelp(): void {
@@ -46,6 +48,7 @@ let cont = false;
 let rpc = false;
 let tui = true;
 let watch = false;
+let doctor = false;
 const positionals: string[] = [];
 const imagePaths: string[] = [];
 
@@ -59,6 +62,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--continue') cont = true;
   else if (a === '--rpc') rpc = true;
   else if (a === '--watch') watch = true;
+  else if (a === '--doctor') doctor = true;
   else if (a === '--verbose') process.env.RINGZERO_VERBOSE = '1';
   else if (a === '--image') imagePaths.push(args[++i] ?? '');
   else if (a === '--version' || a === '-v') version = true;
@@ -77,6 +81,11 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const config = loadConfig();
+
+if (doctor) {
+  const { runDoctor } = await import('./doctor.js');
+  process.exit(runDoctor(config));
+}
 
 if (cont && !resume) {
   const { SessionStore } = await import('../session/store.js');

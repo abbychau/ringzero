@@ -15,6 +15,7 @@ import {
   setCheckpoint,
   gitDiff as gitDiffOutput,
   gitStatus as gitStatusOutput,
+  gitCommit as runGitCommit,
 } from '../tools/git.js';
 import { listSkills, loadSkill, type SkillInfo } from '../skills/loader.js';
 import {
@@ -418,6 +419,11 @@ export class Runner {
 
   gitDiff(): string {
     return gitDiffOutput(this.config.cwd);
+  }
+
+  /** Stage everything and commit; returns the short id or a status string. */
+  gitCommit(message: string): string {
+    return runGitCommit(this.config.cwd, message);
   }
 
   /** Snapshot the worktree before agent changes; returns the sha or null. */

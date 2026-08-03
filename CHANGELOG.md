@@ -47,8 +47,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `consumeSSE` flushes a final partial line (streams that end without a
   trailing newline).
 - `CONTRIBUTING.md` and `docs/EXTENDING.md` (provider/tool/plugin/RPC guides).
+- `--doctor`: zero-dep environment self-check (Node version, TTY, provider
+  key, git repo, workspace sandbox, sessions dir, config summary); exits 1 on
+  any failure so scripts/CI can gate on it (`src/cli/doctor.ts`).
+- `git_commit` tool + `/commit <msg>` (TUI + REPL): stages everything
+  (`git add -A`) and commits; returns the short id, `(nothing to commit)`, or
+  an error (`src/tools/git.ts`).
 
 ### Changed
+
+- Workspace sandbox auto-detect: with `RINGZERO_WORKSPACE` unset, fs tools are
+  locked to the git work-tree root (`detectGitRoot`, `src/config/config.ts`);
+  `off`/`none` disables the sandbox.
 
 - Provider registry order: `API_URL` wins, then Anthropic, then Gemini.
 - TUI: mid-run Enter injects instead of dropping input; `[img]` indicator in

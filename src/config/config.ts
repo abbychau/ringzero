@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { loadEnv, type Env } from './env.js';
 import type { PermissionRule } from '../permission/gate.js';
@@ -34,6 +35,23 @@ export function num(envVar: string | undefined, fallback: number): number {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 }
 
+/**
+ * The git work-tree root of cwd, or undefined when not inside a git repo.
+ * Used as the default workspace sandbox so fs tools stay inside the project.
+ */
+export function detectGitRoot(cwd: string): string | undefined {
+  try {
+    const out = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).toString();
+    return out.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** All ancestor directories from dir up to the filesystem root. */
 export function ancestorDirs(dir: string): string[] {
   const out: string[] = [];
@@ -53,9 +71,15 @@ export function loadConfig(): AppConfig {
   const home = homedir();
   const ringzeroHome = process.env.RINGZERO_HOME ?? join(home, '.ringzero');
   const sessionsDir = process.env.RINGZERO_SESSIONS ?? join(ringzeroHome, 'sessions');
-  const workspace = process.env.RINGZERO_WORKSPACE
-    ? resolve(process.env.RINGZERO_WORKSPACE)
-    : undefined;
+  // Workspace sandbox: explicit RINGZERO_WORKSPACE wins; 'off'/'none' disables
+  // the sandbox; unset falls back to the git work-tree root (when inside a repo).
+  let workspace: string | undefined;
+  const wsEnv = process.env.RINGZERO_WORKSPACE;
+  if (wsEnv !== undefined && wsEnv !== '' && wsEnv !== 'off' && wsEnv !== 'none') {
+    workspace = resolve(wsEnv);
+  } else if (wsEnv === undefined || wsEnv === '') {
+    workspace = detectGitRoot(cwd);
+  }
   const favoriteModels = (process.env.RINGZERO_MODELS ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -92,6 +116,7 @@ export function loadConfig(): AppConfig {
       write_file: 'ask',
       edit_file: 'ask',
       bash: 'ask',
+      git_commit: 'ask',
     },
   };
 }

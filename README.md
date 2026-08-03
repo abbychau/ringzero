@@ -26,7 +26,8 @@ disclosure (skills), and ephemeral sub-agents.
   it (TUI, REPL, and RPC `prompt {interrupt:true}`).
 - **Tools** — read (full / range / auto-outline for large files) / write / edit,
   grep, glob, `related_files` (importers + same-symbol files), bash, web
-  fetch, `git_status` / `git_diff`, `plan`, `todo`, `task` (sub-agent), MCP.
+  fetch, `git_status` / `git_diff` / `git_commit`, `plan`, `todo`, `task`
+  (sub-agent), MCP.
 - **Plan mode** — `/plan` gates the agent: only read-only tools run until it
   presents a plan via the `plan` tool and you approve it; approved plans run
   without further permission prompts.
@@ -104,6 +105,7 @@ ringzero --image shot.png "…"     # attach an image to the prompt (repeatable)
 ringzero --sessions               # list saved sessions (then --resume <id>)
 ringzero --resume <id> "prompt"   # continue a session
 ringzero --version
+ringzero --doctor                 # environment self-check (exit 1 on problems)
 ```
 
 Sessions are stored as JSONL under `~/.ringzero/sessions/` (or `RINGZERO_HOME`).
@@ -127,6 +129,7 @@ ringzero --model <id> "..."     # override model
 ringzero --verbose "..."        # verbose logging
 ringzero --image shot.png "..." # attach an image (vision models)
 ringzero --watch "..."          # re-run on file changes (use --yes for writes)
+ringzero --doctor               # environment self-check (exit 1 on problems)
 ```
 
 ### TUI keys
@@ -143,7 +146,7 @@ Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 
 ### Slash commands (REPL & TUI)
 
-`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /export [path]  /new  /exit`
+`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /export [path]  /new  /exit`
 
 `/image <path>` attaches an image to your next message (shown as `[img]` in the
 header); `/image clear` removes it. `/export [path]` writes the current session
@@ -227,34 +230,37 @@ echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}'
 
 ## Env knobs
 
-| Var                                     | Default           | Meaning                                                                                               |
-| --------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
-| `API_URL` / `API_KEY` / `MODEL`         | —                 | OpenAI-compatible endpoint                                                                            |
-| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | —                 | used when `API_URL` is empty                                                                          |
-| `GEMINI_API_KEY` / `GEMINI_MODEL`       | —                 | used when `API_URL` is empty (after Anthropic); `MODEL` wins over `GEMINI_MODEL`                      |
-| `CONTEXT_BUDGET`                        | —                 | short alias for `RINGZERO_CONTEXT_BUDGET` (handy in `.env`)                                           |
-| `RINGZERO_CONTEXT_BUDGET`               | 32000             | compaction trigger (estimated tokens)                                                                 |
-| `RINGZERO_PRESERVE_RECENT`              | 8000              | tail tokens kept verbatim on compaction                                                               |
-| `RINGZERO_MAX_STEPS`                    | 24                | agent loop step cap                                                                                   |
-| `RINGZERO_MODELS`                       | —                 | comma-separated favorite models for Ctrl+L cycling                                                    |
-| `RINGZERO_RETRIES`                      | 2                 | transient-failure retries (429/5xx/network)                                                           |
-| `RINGZERO_HOME`                         | `~/.ringzero`     | data dir (skills, plugins)                                                                            |
-| `RINGZERO_SESSIONS`                     | `<home>/sessions` | session store dir                                                                                     |
-| `RINGZERO_WORKSPACE`                    | —                 | lock fs tools (read/write/edit/grep/glob) to this root; paths outside are rejected                    |
-| `RINGZERO_VERIFY`                       | —                 | shell command run after the first write/edit of a run; output fed back to the model (e.g. `npm test`) |
-| `RINGZERO_PLAN_MODE`                    | `0`               | start with plan mode on (`1`/`true`)                                                                  |
-| `RINGZERO_ALLOW_PRIVATE_NET`            | `0`               | `1` disables the `web_fetch` SSRF guard (not recommended)                                             |
-| `RINGZERO_BASH_FULL_ENV`                | `0`               | `1` passes the full environment to bash children (secrets are stripped by default)                    |
-| `RINGZERO_NOTIFY`                       | `1` (TTY only)    | `0` disables bell/desktop notifications                                                               |
-| `RINGZERO_NOTIFY_MIN`                   | `30`              | minimum run length (seconds) before a completion notification fires                                   |
-| `RINGZERO_SESSION_LIMIT`                | `50`              | max sessions kept; older ones archive to `<sessions>/archive`                                         |
-| `RINGZERO_SESSION_KEEP_DAYS`            | `0`               | archive sessions older than N days (`0` = off)                                                        |
+| Var                                     | Default           | Meaning                                                                                                                                                           |
+| --------------------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `API_URL` / `API_KEY` / `MODEL`         | —                 | OpenAI-compatible endpoint                                                                                                                                        |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | —                 | used when `API_URL` is empty                                                                                                                                      |
+| `GEMINI_API_KEY` / `GEMINI_MODEL`       | —                 | used when `API_URL` is empty (after Anthropic); `MODEL` wins over `GEMINI_MODEL`                                                                                  |
+| `CONTEXT_BUDGET`                        | —                 | short alias for `RINGZERO_CONTEXT_BUDGET` (handy in `.env`)                                                                                                       |
+| `RINGZERO_CONTEXT_BUDGET`               | 32000             | compaction trigger (estimated tokens)                                                                                                                             |
+| `RINGZERO_PRESERVE_RECENT`              | 8000              | tail tokens kept verbatim on compaction                                                                                                                           |
+| `RINGZERO_MAX_STEPS`                    | 24                | agent loop step cap                                                                                                                                               |
+| `RINGZERO_MODELS`                       | —                 | comma-separated favorite models for Ctrl+L cycling                                                                                                                |
+| `RINGZERO_RETRIES`                      | 2                 | transient-failure retries (429/5xx/network)                                                                                                                       |
+| `RINGZERO_HOME`                         | `~/.ringzero`     | data dir (skills, plugins)                                                                                                                                        |
+| `RINGZERO_SESSIONS`                     | `<home>/sessions` | session store dir                                                                                                                                                 |
+| `RINGZERO_WORKSPACE`                    | git root          | lock fs tools (read/write/edit/grep/glob) to this root; paths outside are rejected. Unset = auto-detect the git work-tree root; `off`/`none` disables the sandbox |
+| `RINGZERO_VERIFY`                       | —                 | shell command run after the first write/edit of a run; output fed back to the model (e.g. `npm test`)                                                             |
+| `RINGZERO_PLAN_MODE`                    | `0`               | start with plan mode on (`1`/`true`)                                                                                                                              |
+| `RINGZERO_ALLOW_PRIVATE_NET`            | `0`               | `1` disables the `web_fetch` SSRF guard (not recommended)                                                                                                         |
+| `RINGZERO_BASH_FULL_ENV`                | `0`               | `1` passes the full environment to bash children (secrets are stripped by default)                                                                                |
+| `RINGZERO_NOTIFY`                       | `1` (TTY only)    | `0` disables bell/desktop notifications                                                                                                                           |
+| `RINGZERO_NOTIFY_MIN`                   | `30`              | minimum run length (seconds) before a completion notification fires                                                                                               |
+| `RINGZERO_SESSION_LIMIT`                | `50`              | max sessions kept; older ones archive to `<sessions>/archive`                                                                                                     |
+| `RINGZERO_SESSION_KEEP_DAYS`            | `0`               | archive sessions older than N days (`0` = off)                                                                                                                    |
 
 ### Workspace sandbox
 
 Set `RINGZERO_WORKSPACE=/path/to/project` to restrict the file tools
 (`read_file`, `write_file`, `edit_file`, `grep`, `glob`) to that directory —
-attempts to touch anything outside it are rejected instead of executed.
+attempts to touch anything outside it are rejected instead of executed. When
+unset, the sandbox is auto-detected as the git work-tree root (so a prompt
+never writes outside the project by accident); set it to `off` (or `none`) to
+disable the sandbox entirely. `ringzero --doctor` shows which root is active.
 
 ## Layout
 

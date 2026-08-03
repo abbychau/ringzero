@@ -303,6 +303,7 @@ export function slashCommands(): string[] {
     'new',
     'diff',
     'status',
+    'commit',
     'checkpoint',
     'rollback',
     'plan',

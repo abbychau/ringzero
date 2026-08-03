@@ -8,6 +8,7 @@ import {
   isGitRepo,
   gitStatus,
   gitDiff,
+  gitCommit,
   createCheckpoint,
   restoreCheckpoint,
   latestCheckpoint,
@@ -64,6 +65,35 @@ test('gitDiff shows tracked changes only', () => {
   assert.ok(stat.includes('a.txt'));
   const pathFiltered = gitDiff(dir, { path: 'a.txt' });
   assert.ok(pathFiltered.includes('+changed'));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('gitCommit stages and commits untracked and modified files', () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'new.txt'), 'x');
+  writeFileSync(join(dir, 'a.txt'), 'one\nchanged\n');
+  const out = gitCommit(dir, 'my change');
+  assert.match(out, /^[0-9a-f]{7,40}/);
+  const status = gitStatus(dir);
+  assert.ok(status.startsWith('## main'), status);
+  assert.ok(!status.includes('??'), status);
+  assert.ok(!status.includes(' M'), status);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('gitCommit empty message and not-a-repo cases', () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'new.txt'), 'x');
+  assert.match(gitCommit(dir, '   '), /^error: empty commit message/);
+  const plain = mkdtempSync(join(tmpdir(), 'rz-plain-'));
+  assert.equal(gitCommit(plain, 'msg'), '(not a git repo)');
+  rmSync(dir, { recursive: true, force: true });
+  rmSync(plain, { recursive: true, force: true });
+});
+
+test('gitCommit reports (nothing to commit) on a clean tree', () => {
+  const dir = makeRepo();
+  assert.equal(gitCommit(dir, 'nothing'), '(nothing to commit)');
   rmSync(dir, { recursive: true, force: true });
 });
 

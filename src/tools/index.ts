@@ -3,7 +3,7 @@ import { readFileTool, writeFileTool, editFileTool } from './fs.js';
 import { grepTool, globTool } from './search.js';
 import { bashTool } from './bash.js';
 import { webFetchTool } from './web.js';
-import { gitStatusTool, gitDiffTool } from './git.js';
+import { gitStatusTool, gitDiffTool, gitCommitTool } from './git.js';
 import { planTool } from './plan.js';
 import { relatedFilesTool } from './related.js';
 
@@ -20,6 +20,7 @@ export function defaultTools(): Tool[] {
     webFetchTool(),
     gitStatusTool(),
     gitDiffTool(),
+    gitCommitTool(),
     planTool(),
   ];
 }

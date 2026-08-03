@@ -134,7 +134,7 @@ async function handleSlash(
   switch (cmd) {
     case 'help':
       console.log(
-        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /new  /exit',
+        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /new  /exit',
       );
       break;
     case 'usage': {
@@ -236,6 +236,15 @@ async function handleSlash(
     case 'status':
       console.log(runner.gitStatus());
       break;
+    case 'commit': {
+      const msg = rest.join(' ').trim();
+      if (!msg) {
+        console.log('usage: /commit <message>');
+        break;
+      }
+      console.log(runner.gitCommit(msg));
+      break;
+    }
     case 'checkpoint': {
       const sha = runner.checkpoint();
       console.log(

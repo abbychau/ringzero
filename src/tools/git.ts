@@ -213,6 +213,47 @@ export function gitStatusTool(): Tool {
   };
 }
 
+/**
+ * Stage everything (git add -A) and commit with `message`. Returns the new
+ * commit id (short form) or a human-readable status string: '(not a git
+ * repo)', '(nothing to commit)', or 'error: …'.
+ */
+export function gitCommit(cwd: string, message: string): string {
+  if (!isGitRepo(cwd)) return '(not a git repo)';
+  const m = message.trim();
+  if (!m) return 'error: empty commit message';
+  try {
+    runGit(['add', '-A'], cwd);
+    runGit(['commit', '-m', m], cwd);
+  } catch (e) {
+    const err = e as Error & { stderr?: string | Buffer; stdout?: string | Buffer };
+    const out = `${err.stdout ? String(err.stdout) : ''}${err.stderr ? String(err.stderr) : ''}`;
+    if ((err.message + '\n' + out).includes('nothing to commit')) return '(nothing to commit)';
+    return `error: ${out.trim().split('\n')[0] || err.message}`;
+  }
+  return runGit(['--no-pager', 'log', '-1', '--oneline'], cwd).trim();
+}
+
+export function gitCommitTool(): Tool {
+  return {
+    definition: {
+      name: 'git_commit',
+      description:
+        'Stage all working-tree changes (git add -A) and commit them with the given message. Returns the new commit id, "(nothing to commit)", or an error.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'commit message' },
+        },
+        required: ['message'],
+      },
+    },
+    async execute(input, ctx: ToolContext) {
+      return gitCommit(ctx.cwd, input.message ? String(input.message) : '');
+    },
+  };
+}
+
 export function gitDiffTool(): Tool {
   return {
     definition: {
