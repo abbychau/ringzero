@@ -219,6 +219,11 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
       }
       break;
     }
+    case 'export': {
+      const res = r.exportSession(undefined, rest[0]);
+      pushSys(res.path ? `exported to ${res.path}` : `export error: ${res.error}`);
+      break;
+    }
     default:
       if (cmd && (await r.runPluginCommand(cmd, rest))) break;
       pushSys(`unknown command: /${cmd}`);

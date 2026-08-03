@@ -1,4 +1,11 @@
-import { mkdirSync, readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  readdirSync,
+  existsSync,
+  renameSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import type { SessionMessage } from '../kernel/types.js';
 
@@ -97,5 +104,34 @@ export class SessionStore {
       }
     }
     return out.sort((a, b) => b.updated - a.updated);
+  }
+
+  /**
+   * Archive sessions beyond the cap into `<dir>/archive` (moved, never
+   * deleted). `maxSessions` keeps the newest N; `keepDays` archives anything
+   * older than that many days (0 = off). `except` is never archived. Returns
+   * the number of archived sessions.
+   */
+  prune(opts: { maxSessions: number; keepDays?: number; except?: string }): number {
+    const list = this.list();
+    if (list.length === 0) return 0;
+    const keepDays = opts.keepDays && opts.keepDays > 0 ? opts.keepDays : 0;
+    const cutoff = keepDays > 0 ? Date.now() - keepDays * 86_400_000 : 0;
+    const archiveDir = join(this.dir, 'archive');
+    let archived = 0;
+    for (const s of list) {
+      if (s.id === opts.except) continue;
+      const tooMany = list.indexOf(s) >= opts.maxSessions;
+      const tooOld = cutoff > 0 && s.updated < cutoff;
+      if (!tooMany && !tooOld) continue;
+      mkdirSync(archiveDir, { recursive: true });
+      try {
+        renameSync(this.file(s.id), join(archiveDir, `${s.id}.jsonl`));
+        archived++;
+      } catch {
+        /* best-effort */
+      }
+    }
+    return archived;
   }
 }

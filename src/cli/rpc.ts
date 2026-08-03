@@ -14,6 +14,7 @@ import { Runner } from './runner.js';
  *   model/get | model/set {model}     → { model }
  *   sessions/list                     → [{ id, title, updated }]
  *   sessions/resume {id}              → { sessionId }
+ *   sessions/export {id?, path?}      → { path }  (Markdown transcript)
  *   prompt {text, images?, notify?}   → { sessionId, text, usage }  (runs the agent)
  *   prompt {text, interrupt: true}    → { injected }  (mid-run injection, bypasses the queue)
  *
@@ -111,6 +112,15 @@ export async function runRpc(config: AppConfig, opts: { model?: string } = {}): 
             reply(undefined, { code: 404, message: 'session not found' });
           }
           break;
+        case 'sessions/export': {
+          const id = typeof msg.params?.id === 'string' ? msg.params.id : undefined;
+          const path =
+            typeof msg.params?.path === 'string' && msg.params.path ? msg.params.path : undefined;
+          const res = runner.exportSession(id, path);
+          if (res.path) reply({ path: res.path });
+          else reply(undefined, { code: 404, message: res.error ?? 'not found' });
+          break;
+        }
         case 'prompt': {
           if (typeof msg.params?.text !== 'string') {
             reply(undefined, { code: -32602, message: 'text required' });

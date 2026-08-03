@@ -294,6 +294,7 @@ export function slashCommands(): string[] {
     'plan',
     'todos',
     'image',
+    'export',
     'exit',
   ];
 }

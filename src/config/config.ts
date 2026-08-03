@@ -29,7 +29,7 @@ Rules:
 - Work step by step; verify results (build/tests) when relevant.
 - Be concise. Answer in the user's language. When done, give a short summary.`;
 
-function num(envVar: string | undefined, fallback: number): number {
+export function num(envVar: string | undefined, fallback: number): number {
   const v = Number(envVar);
   return Number.isFinite(v) && v > 0 ? v : fallback;
 }

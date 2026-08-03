@@ -283,6 +283,11 @@ async function handleSlash(
       }
       break;
     }
+    case 'export': {
+      const res = runner.exportSession(undefined, rest[0]);
+      console.log(res.path ? `exported to ${res.path}` : `export error: ${res.error}`);
+      break;
+    }
     default:
       if (cmd && (await runner.runPluginCommand(cmd, rest))) break;
       console.log(`unknown command: /${cmd}`);

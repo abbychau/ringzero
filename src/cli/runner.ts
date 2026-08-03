@@ -1,8 +1,10 @@
 import type { AppConfig } from '../config/config.js';
+import { num } from '../config/config.js';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SessionStore } from '../session/store.js';
+import { exportMarkdown } from '../session/export.js';
 import { Agent } from '../kernel/agent.js';
 import { defaultTools } from '../tools/index.js';
 import { createTaskTool } from '../tools/task.js';
@@ -80,6 +82,13 @@ export class Runner {
     this.gate = new PermissionGate({
       rules: config.permissions,
       ask: opts.ask ?? (async () => 'no' as const),
+    });
+    // Housekeeping: archive old/excess sessions (env-tunable, off by default
+    // except for the 50-session cap). Never archives the session being resumed.
+    this.store.prune({
+      maxSessions: num(process.env.RINGZERO_SESSION_LIMIT, 50),
+      keepDays: num(process.env.RINGZERO_SESSION_KEEP_DAYS, 0),
+      except: this.sessionId,
     });
   }
 
@@ -281,6 +290,25 @@ export class Runner {
       if (found) sys.push(`# Skill: ${name}\n${loadSkill(found.path)}`);
     }
     return sys;
+  }
+
+  /**
+   * Export a session to a Markdown transcript. Defaults to the current
+   * session and writes `<cwd>/transcript-<id>.md` unless outPath is given.
+   */
+  exportSession(id?: string, outPath?: string): { path?: string; error?: string } {
+    const sessionId = id ?? this.sessionId;
+    if (!sessionId) return { error: 'no session' };
+    try {
+      const md = exportMarkdown(this.store, sessionId);
+      if (md === null) return { error: 'session not found' };
+      const p = outPath ?? join(this.config.cwd, `transcript-${sessionId}.md`);
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, md);
+      return { path: p };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
   }
 
   setModel(model: string): void {
