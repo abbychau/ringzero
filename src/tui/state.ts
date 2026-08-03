@@ -1,6 +1,7 @@
 /** Pure state + reducer for the Ink TUI (testable without a TTY). */
 import { wrapText, truncateWidth } from './term.js';
 import type { TodoItem } from '../tools/todo.js';
+import type { ImageInput } from '../kernel/types.js';
 
 export type Block =
   | { tag: 'user'; text: string }
@@ -67,6 +68,8 @@ export interface State {
   todos: TodoItem[];
   /** Collapsed strip (1 line) vs full list. */
   todosExpanded: boolean;
+  /** Image attached via /image; sent with the next submitted message. */
+  pendingImage?: ImageInput;
 }
 
 export type Action =
@@ -87,6 +90,7 @@ export type Action =
   | { type: 'setPlanMode'; planMode: boolean }
   | { type: 'setTodos'; todos: TodoItem[] }
   | { type: 'toggleTodos' }
+  | { type: 'setImage'; image?: ImageInput }
   | { type: 'history'; index: number }
   | { type: 'clear' };
 
@@ -200,6 +204,8 @@ export function reducer(s: State, a: Action): State {
       return { ...s, todos: a.todos };
     case 'toggleTodos':
       return { ...s, todosExpanded: !s.todosExpanded };
+    case 'setImage':
+      return { ...s, pendingImage: a.image };
     case 'submit': {
       const text = a.text.trim();
       const history =
@@ -287,6 +293,7 @@ export function slashCommands(): string[] {
     'rollback',
     'plan',
     'todos',
+    'image',
     'exit',
   ];
 }

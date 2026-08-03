@@ -1,6 +1,6 @@
 import readline from 'node:readline';
 import type { AppConfig } from '../config/config.js';
-import type { TokenUsage } from '../kernel/types.js';
+import type { TokenUsage, ImageInput } from '../kernel/types.js';
 import type { Agent } from '../kernel/agent.js';
 import { Runner } from './runner.js';
 
@@ -14,7 +14,7 @@ import { Runner } from './runner.js';
  *   model/get | model/set {model}     → { model }
  *   sessions/list                     → [{ id, title, updated }]
  *   sessions/resume {id}              → { sessionId }
- *   prompt {text, notify?}            → { sessionId, text, usage }  (runs the agent)
+ *   prompt {text, images?, notify?}   → { sessionId, text, usage }  (runs the agent)
  *   prompt {text, interrupt: true}    → { injected }  (mid-run injection, bypasses the queue)
  *
  * Notifications (emitted when `notify` is set on prompt):
@@ -123,8 +123,18 @@ export async function runRpc(config: AppConfig, opts: { model?: string } = {}): 
           let text = '';
           let usage: TokenUsage | undefined;
           const notify = msg.params?.notify === true;
+          const rawImages = msg.params?.images;
+          const images: ImageInput[] | undefined = Array.isArray(rawImages)
+            ? rawImages.filter(
+                (x): x is ImageInput =>
+                  typeof x === 'object' &&
+                  x !== null &&
+                  typeof (x as ImageInput).mime === 'string' &&
+                  typeof (x as ImageInput).data === 'string',
+              )
+            : undefined;
           try {
-            for await (const ev of agent.run(msg.params.text)) {
+            for await (const ev of agent.run(msg.params.text, { images })) {
               if (notify) send({ jsonrpc: '2.0', method: 'prompt/event', params: { ...ev } });
               if (ev.type === 'text') text += ev.text;
               else if (ev.type === 'finish') usage = ev.usage;

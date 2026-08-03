@@ -5,6 +5,7 @@ import process from 'node:process';
 import type { AppConfig } from '../config/config.js';
 import { Runner } from '../cli/runner.js';
 import type { Agent } from '../kernel/agent.js';
+import type { ImageInput } from '../kernel/types.js';
 import {
   reducer,
   initial,
@@ -125,7 +126,7 @@ export function App({
   }, [askRef]);
 
   const runTurn = useCallback(
-    async (prompt: string) => {
+    async (prompt: string, images?: ImageInput[]) => {
       runningRef.current = true;
       dispatch({ type: 'runStart' });
       const abort = new AbortController();
@@ -135,7 +136,7 @@ export function App({
       let usage: Usage | undefined;
       let status = 'idle';
       try {
-        for await (const ev of agent.run(prompt)) {
+        for await (const ev of agent.run(prompt, { images })) {
           if (ev.type === 'text') dispatch({ type: 'appendAssistant', delta: ev.text });
           else if (ev.type === 'thinking') dispatch({ type: 'appendThinking', delta: ev.text });
           else if (ev.type === 'tool_start')
@@ -237,7 +238,9 @@ export function App({
         return;
       }
       dispatch({ type: 'push', block: { tag: 'user', text: line } });
-      void runTurn(line);
+      const pending = stateRef.current.pendingImage;
+      if (pending) dispatch({ type: 'setImage' });
+      void runTurn(line, pending ? [pending] : undefined);
     },
     [runCommand, runTurn, pushSys],
   );
@@ -566,6 +569,7 @@ export function App({
         {' '}
         RingZero · {state.model}
         {state.planMode ? ' · [plan]' : ''}
+        {state.pendingImage ? ' · [img]' : ''}
         {runnerRef.current.sessionId ? ` · ${runnerRef.current.sessionId}` : ''}
       </Text>
       {todosH > 0 && (

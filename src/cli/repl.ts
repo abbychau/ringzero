@@ -3,7 +3,7 @@ import type { AppConfig } from '../config/config.js';
 import { Runner } from './runner.js';
 import { createDefaultProvider } from '../providers/registry.js';
 import type { AskResponse } from '../permission/gate.js';
-import type { TokenUsage } from '../kernel/types.js';
+import type { TokenUsage, ImageInput } from '../kernel/types.js';
 import type { Agent } from '../kernel/agent.js';
 import { estimateCost, fmtCost } from '../kernel/cost.js';
 
@@ -39,6 +39,8 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
   // The agent currently running, or null when idle. Typing while a run is in
   // progress injects the line into the agent instead of starting a second run.
   let runningAgent: Agent | null = null;
+  // Image attached via /image; sent with the next message.
+  const imageState: { current?: ImageInput } = {};
   const title = 'ringzero session';
   await runner.init();
 
@@ -72,6 +74,7 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
         line,
         () => lastUsage,
         (u) => (lastUsage = u),
+        imageState,
       );
       rl.prompt();
       return;
@@ -81,7 +84,9 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
     runningAgent = agent;
     let usage: TokenUsage | undefined;
     try {
-      for await (const ev of agent.run(line)) {
+      for await (const ev of agent.run(line, {
+        images: imageState.current ? [imageState.current] : undefined,
+      })) {
         if (ev.type === 'text') process.stdout.write(ev.text);
         else if (ev.type === 'tool_start') process.stdout.write(`\n⛏ ${ev.name}\n`);
         else if (ev.type === 'permission' && !ev.allowed)
@@ -94,6 +99,7 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
       process.stdout.write(`\n[error: ${err instanceof Error ? err.message : String(err)}]\n`);
     }
     runningAgent = null;
+    imageState.current = undefined;
     lastUsage = usage;
     if (usage)
       process.stdout.write(
@@ -111,12 +117,13 @@ async function handleSlash(
   line: string,
   getUsage: () => TokenUsage | undefined,
   setUsage: (u: TokenUsage) => void,
+  imageState: { current?: ImageInput },
 ): Promise<void> {
   const [cmd, ...rest] = line.slice(1).split(/\s+/);
   switch (cmd) {
     case 'help':
       console.log(
-        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /new  /exit',
+        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /new  /exit',
       );
       break;
     case 'usage': {
@@ -248,6 +255,21 @@ async function handleSlash(
           ? todos.map((t, i) => `${i + 1}. ${t.done ? '[x]' : '[ ]'} ${t.text}`).join('\n')
           : '(no todos)',
       );
+      break;
+    }
+    case 'image': {
+      const path = rest[0];
+      if (!path) {
+        console.log('usage: /image <path>  (attaches to your next message)');
+        break;
+      }
+      try {
+        const { loadImage } = await import('../util/image.js');
+        imageState.current = loadImage(path);
+        console.log(`image attached: ${path} (sent with your next message)`);
+      } catch (e) {
+        console.log(`image error: ${e instanceof Error ? e.message : String(e)}`);
+      }
       break;
     }
     default:

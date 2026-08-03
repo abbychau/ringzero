@@ -1,4 +1,5 @@
 import type { AppConfig } from '../config/config.js';
+import type { ImageInput } from '../kernel/types.js';
 import { Runner } from './runner.js';
 
 export interface OneShotOptions {
@@ -6,6 +7,7 @@ export interface OneShotOptions {
   yes?: boolean;
   model?: string;
   json?: boolean;
+  images?: ImageInput[];
 }
 
 /** One-shot (or --json) run. In scripted mode asks default to deny unless --yes. */
@@ -24,7 +26,7 @@ export async function runOneShot(
   await runner.init();
   const agent = runner.agent();
 
-  for await (const ev of agent.run(prompt)) {
+  for await (const ev of agent.run(prompt, { images: opts.images })) {
     if (opts.json) {
       console.log(JSON.stringify({ sessionId, ...ev }));
     } else if (ev.type === 'text') {

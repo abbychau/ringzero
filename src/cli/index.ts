@@ -16,12 +16,15 @@ Usage:
   ringzero --rpc                JSON-RPC mode over stdin/stdout (SDK)
   ringzero --model <id> "..."   override model
   ringzero --yes "..."          auto-allow all tools (scripted mode)
+  ringzero --image <path> "..." attach an image to the prompt (repeatable)
   ringzero --version            print version
 
 TUI keys: Enter submit · ↑/↓ history · PgUp/PgDn scroll · Ctrl+C abort/exit
+         Enter while running injects a message into the active run
 Env (.env or environment):
   API_URL, API_KEY, MODEL          OpenAI-compatible endpoint (packyapi etc.)
   ANTHROPIC_API_KEY, ANTHROPIC_MODEL   Anthropic (used when API_URL is empty)
+  GEMINI_API_KEY, GEMINI_MODEL     Gemini (used when API_URL is empty)
   RINGZERO_CONTEXT_BUDGET          context budget for compaction (default 32000)
   RINGZERO_PRESERVE_RECENT         tail tokens kept verbatim across compaction
 `;
@@ -41,6 +44,7 @@ let cont = false;
 let rpc = false;
 let tui = true;
 const positionals: string[] = [];
+const imagePaths: string[] = [];
 
 for (let i = 0; i < args.length; i++) {
   const a = args[i]!;
@@ -52,6 +56,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--continue') cont = true;
   else if (a === '--rpc') rpc = true;
   else if (a === '--verbose') process.env.RINGZERO_VERBOSE = '1';
+  else if (a === '--image') imagePaths.push(args[++i] ?? '');
   else if (a === '--version' || a === '-v') version = true;
   else if (a === '--repl') tui = false;
   else if (a === '--tui') tui = true;
@@ -98,9 +103,12 @@ if (listSessions) {
 
 const prompt = positionals.join(' ');
 
+const images =
+  imagePaths.length > 0 ? (await import('../util/image.js')).loadImages(imagePaths) : undefined;
+
 try {
   if (prompt) {
-    await runOneShot(config, prompt, { resume, yes, model, json });
+    await runOneShot(config, prompt, { resume, yes, model, json, images });
   } else if (rpc) {
     const { runRpc } = await import('./rpc.js');
     await runRpc(config, { model });

@@ -58,7 +58,20 @@ export function toOpenAIMessages(msgs: ProviderMessage[]): unknown[] {
     if (m.role === 'system') {
       out.push({ role: 'system', content: m.content });
     } else if (m.role === 'user') {
-      out.push({ role: 'user', content: m.content });
+      if (m.images?.length) {
+        out.push({
+          role: 'user',
+          content: [
+            { type: 'text', text: m.content },
+            ...m.images.map((img) => ({
+              type: 'image_url',
+              image_url: { url: `data:${img.mime};base64,${img.data}` },
+            })),
+          ],
+        });
+      } else {
+        out.push({ role: 'user', content: m.content });
+      }
     } else if (m.role === 'assistant') {
       if (m.toolCalls?.length) {
         out.push({

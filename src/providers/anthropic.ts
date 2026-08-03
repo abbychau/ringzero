@@ -53,7 +53,7 @@ interface AnthropicEvent {
   usage?: AnthropicUsage;
 }
 
-function toAnthropicMessages(msgs: ProviderMessage[], cacheControl = false): unknown[] {
+export function toAnthropicMessages(msgs: ProviderMessage[], cacheControl = false): unknown[] {
   const out: unknown[] = [];
   let lastUserIdx = -1;
   for (let i = 0; i < msgs.length; i++) {
@@ -61,9 +61,20 @@ function toAnthropicMessages(msgs: ProviderMessage[], cacheControl = false): unk
   }
   msgs.forEach((m, idx) => {
     if (m.role === 'user') {
-      const block: Record<string, unknown> = { type: 'text', text: m.content };
-      if (cacheControl && idx === lastUserIdx) block.cache_control = { type: 'ephemeral' };
-      out.push({ role: 'user', content: [block] });
+      const blocks: Record<string, unknown>[] = [];
+      if (m.content) {
+        const block: Record<string, unknown> = { type: 'text', text: m.content };
+        if (cacheControl && idx === lastUserIdx) block.cache_control = { type: 'ephemeral' };
+        blocks.push(block);
+      }
+      for (const img of m.images ?? []) {
+        blocks.push({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mime, data: img.data },
+        });
+      }
+      if (blocks.length === 0) blocks.push({ type: 'text', text: '' });
+      out.push({ role: 'user', content: blocks });
     } else if (m.role === 'assistant') {
       const content: unknown[] = [];
       if (m.content) content.push({ type: 'text', text: m.content });

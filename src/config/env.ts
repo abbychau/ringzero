@@ -12,6 +12,7 @@ export interface Env {
   model: string;
   anthropicApiKey?: string;
   anthropicModel?: string;
+  geminiApiKey?: string;
 }
 
 export function loadDotEnv(dir: string): void {
@@ -36,8 +37,9 @@ export function loadEnv(cwd = process.cwd()): Env {
   return {
     apiUrl: process.env.API_URL ?? 'https://api.openai.com/v1',
     apiKey: process.env.API_KEY ?? '',
-    model: process.env.MODEL ?? 'gpt-4o-mini',
+    model: process.env.MODEL ?? process.env.GEMINI_MODEL ?? 'gpt-4o-mini',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     anthropicModel: process.env.ANTHROPIC_MODEL,
+    geminiApiKey: process.env.GEMINI_API_KEY,
   };
 }

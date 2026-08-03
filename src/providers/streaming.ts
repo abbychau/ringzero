@@ -59,6 +59,16 @@ export async function* consumeSSE(
         }
       }
     }
+    // Flush a final partial line (stream that ends without a trailing newline).
+    if (buf) {
+      const line = buf.replace(/\r$/, '');
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        const data = line.slice(5).trimStart();
+        if (data !== '[DONE]') yield { event, data };
+      }
+    }
   } finally {
     reader.releaseLock();
   }

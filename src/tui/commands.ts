@@ -198,6 +198,27 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
       }
       break;
     }
+    case 'image': {
+      const path = rest[0];
+      if (!path) {
+        pushSys('usage: /image <path>  (attaches to your next message; /image clear to remove)');
+        break;
+      }
+      if (path === 'clear') {
+        deps.dispatch({ type: 'setImage' });
+        pushSys('image cleared');
+        break;
+      }
+      try {
+        const { loadImage } = await import('../util/image.js');
+        const img = loadImage(path);
+        deps.dispatch({ type: 'setImage', image: img });
+        pushSys(`image attached: ${path} (sent with your next message)`);
+      } catch (e) {
+        pushSys(`image error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      break;
+    }
     default:
       if (cmd && (await r.runPluginCommand(cmd, rest))) break;
       pushSys(`unknown command: /${cmd}`);

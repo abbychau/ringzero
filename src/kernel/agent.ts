@@ -9,6 +9,7 @@ import type {
   TokenUsage,
   ProviderMessage,
   ChatEvent,
+  ImageInput,
 } from './types.js';
 import { PLAN_APPROVED } from './types.js';
 import { newId } from './id.js';
@@ -100,7 +101,7 @@ function toProviderMessages(history: SessionMessage[]): ProviderMessage[] {
       return { role: 'assistant', content: m.content, toolCalls: m.toolCalls };
     }
     if (m.role === 'tool') return { role: 'tool', content: m.content, toolCallId: m.toolCallId };
-    return { role: m.role, content: m.content };
+    return { role: m.role, content: m.content, images: m.images };
   });
 }
 
@@ -172,11 +173,13 @@ export class Agent {
   /**
    * Run the agent for one user turn (multi-step until no more tool calls).
    * Yields events; `finish` is always the last event.
+   * `images` attach to the first user message (one-shot: they are not persisted
+   * to the session store, so later turns do not resend them).
    */
-  async *run(userText: string): AsyncGenerator<AgentEvent> {
+  async *run(userText: string, opts: { images?: ImageInput[] } = {}): AsyncGenerator<AgentEvent> {
     this.running = true;
     try {
-      yield* this.runInternal(userText);
+      yield* this.runInternal(userText, opts);
     } finally {
       this.running = false;
       this.interrupts.length = 0;
@@ -184,7 +187,10 @@ export class Agent {
     }
   }
 
-  private async *runInternal(userText: string): AsyncGenerator<AgentEvent> {
+  private async *runInternal(
+    userText: string,
+    opts: { images?: ImageInput[] } = {},
+  ): AsyncGenerator<AgentEvent> {
     const emit = (e: AgentEvent) => {
       this.opts.onEvent?.(e);
       return e;
@@ -216,7 +222,13 @@ export class Agent {
       history.push(m);
       this.opts.onMessage?.(m);
     };
-    push({ id: newId('msg'), role: 'user', content: userText, ts: Date.now() });
+    push({
+      id: newId('msg'),
+      role: 'user',
+      content: userText,
+      images: opts.images,
+      ts: Date.now(),
+    });
     // Cumulative token usage across ALL model calls in this run (not just the last).
     let usage: TokenUsage | undefined;
     const addUsage = (u: TokenUsage | undefined): void => {

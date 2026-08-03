@@ -175,7 +175,16 @@ export class Runner {
       },
       onMessage: (m) => {
         this.ensureSession(m.content.slice(0, 48) || 'session');
-        this.store.append(this.sessionId!, m);
+        // Images are one-shot: they live in memory for this turn only and are
+        // never persisted (base64 would bloat the session store), so they can
+        // never be replayed from a loaded history.
+        if (m.images) {
+          const { images, ...rest } = m;
+          void images;
+          this.store.append(this.sessionId!, rest);
+        } else {
+          this.store.append(this.sessionId!, m);
+        }
       },
       // Persist auto-compaction so the store shrinks with the context instead of
       // re-summarizing the same old messages on every turn.
