@@ -49,6 +49,7 @@ export function StatusBar({
   session?: Usage;
 }): React.JSX.Element {
   const sc = state.scroll > 0 ? `  · ↑${state.scroll} ${visible}/${total}` : '';
+  const focus = state.transcriptFocus ? '  · ↑/↓ scroll · Esc to input' : '';
   const ctx =
     state.ctxTokens !== undefined
       ? `  · ctx≈${(state.ctxTokens / 1000).toFixed(1)}k${budget ? `/${Math.round(budget / 1000)}k` : ''}`
@@ -59,7 +60,7 @@ export function StatusBar({
   return (
     <Box>
       {state.running ? <Spinner /> : <Text dimColor>●</Text>}
-      <Text dimColor> {truncateWidth(state.status + sc + ctx + ses, 100)}</Text>
+      <Text dimColor> {truncateWidth(state.status + sc + focus + ctx + ses, 100)}</Text>
     </Box>
   );
 }

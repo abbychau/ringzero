@@ -20,8 +20,9 @@ Usage:
   ringzero --image <path> "..." attach an image to the prompt (repeatable)
   ringzero --version            print version
 
-TUI keys: Enter submit · ↑/↓ history · PgUp/PgDn scroll · Ctrl+C abort/exit
-         Enter while running injects a message into the active run
+TUI keys: Enter submit · PgUp/PgDn or mouse wheel scroll
+         ↑/↓ history (transcript focus: ↑/↓ scroll · Esc returns to input)
+         Ctrl+C abort/exit · Enter while running injects into the active run
 Env (.env or environment):
   API_URL, API_KEY, MODEL          OpenAI-compatible endpoint (packyapi etc.)
   ANTHROPIC_API_KEY, ANTHROPIC_MODEL   Anthropic (used when API_URL is empty)

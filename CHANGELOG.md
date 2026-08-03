@@ -59,6 +59,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- TUI transcript focus: mouse wheel/click inside the transcript frame now lets
+  ↑/↓ (and PgUp/PgDn) scroll it instead of hijacking input history; Esc or
+  scrolling back to the bottom returns to the input. The status bar hints the
+  keys while focused (`src/tui/app.tsx`, `src/tui/state.ts`).
+- Command output decoding (`bash`, `verify`, and the auto-verify hook): output
+  is decoded as UTF-8 first, then falls back to the Windows legacy console
+  codepage (GBK/Big5/Shift-JIS… derived from the system locale), so CJK output
+  from `cmd`/PowerShell no longer renders as mojibake in the TUI. Bytes are
+  buffered and decoded once, fixing multi-byte chars split across chunks.
+  `RINGZERO_OS_ENCODING` overrides (`src/tools/bash.ts`).
 - Auto-compaction results are now persisted to the session store via a new
   `onCompact` callback instead of silently keeping stale history on disk.
 - Session store `load()` tolerates corrupt lines instead of failing the whole

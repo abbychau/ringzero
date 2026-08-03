@@ -186,3 +186,31 @@ test('reducer resets suggestIdx on input/submit and clamps via suggestIdx action
   s = reducer(s, { type: 'submit', text: '/compact' });
   assert.equal(s.suggestIdx, 0);
 });
+
+test('reducer transcriptFocus: set, clear, and reset on new content', () => {
+  let s = initial('m');
+  assert.equal(s.transcriptFocus, false);
+  s = reducer(s, { type: 'setTranscriptFocus', focus: true });
+  assert.equal(s.transcriptFocus, true);
+  // new content snaps focus back to the input
+  s = reducer(s, { type: 'push', block: { tag: 'sys', text: 'hi' } });
+  assert.equal(s.transcriptFocus, false);
+  assert.equal(s.scroll, 0);
+  // same for submit and run start
+  s = reducer(s, { type: 'setTranscriptFocus', focus: true });
+  s = reducer(s, { type: 'submit', text: 'hi' });
+  assert.equal(s.transcriptFocus, false);
+  s = reducer(s, { type: 'setTranscriptFocus', focus: true });
+  s = reducer(s, { type: 'runStart' });
+  assert.equal(s.transcriptFocus, false);
+});
+
+test('reducer scroll clamps at 0', () => {
+  let s = initial('m');
+  s = reducer(s, { type: 'scroll', delta: 3 });
+  assert.equal(s.scroll, 3);
+  s = reducer(s, { type: 'scroll', delta: -1 });
+  assert.equal(s.scroll, 2);
+  s = reducer(s, { type: 'scroll', delta: -99 });
+  assert.equal(s.scroll, 0);
+});

@@ -60,6 +60,8 @@ export interface State {
   /** Last estimated context tokens for the current session (from Runner). */
   ctxTokens?: number;
   scroll: number;
+  /** Mouse wheel/click moved focus to the transcript: ↑/↓ scroll it instead of input history. */
+  transcriptFocus: boolean;
   modal?: Modal;
   model: string;
   /** Plan mode banner + gating (read-only until plan approved). */
@@ -84,6 +86,7 @@ export type Action =
   | { type: 'runEnd'; usage?: Usage; status: string; ctx?: number }
   | { type: 'status'; text: string }
   | { type: 'scroll'; delta: number }
+  | { type: 'setTranscriptFocus'; focus: boolean }
   | { type: 'suggestIdx'; index: number }
   | { type: 'setModal'; modal?: Modal }
   | { type: 'setModel'; model: string }
@@ -105,6 +108,7 @@ export function initial(model: string, planMode = false): State {
     running: false,
     status: 'ready',
     scroll: 0,
+    transcriptFocus: false,
     model,
     planMode,
     todos: [],
@@ -115,7 +119,7 @@ export function initial(model: string, planMode = false): State {
 export function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'push':
-      return { ...s, blocks: [...s.blocks, a.block], scroll: 0 };
+      return { ...s, blocks: [...s.blocks, a.block], scroll: 0, transcriptFocus: false };
     case 'appendAssistant': {
       const blocks = [...s.blocks];
       const last = blocks[blocks.length - 1];
@@ -124,7 +128,7 @@ export function reducer(s: State, a: Action): State {
       } else {
         blocks.push({ tag: 'assistant', text: a.delta });
       }
-      return { ...s, blocks, scroll: 0 };
+      return { ...s, blocks, scroll: 0, transcriptFocus: false };
     }
     case 'appendThinking': {
       const blocks = [...s.blocks];
@@ -134,7 +138,7 @@ export function reducer(s: State, a: Action): State {
       } else {
         blocks.push({ tag: 'thinking', text: a.delta, expanded: false });
       }
-      return { ...s, blocks, scroll: 0 };
+      return { ...s, blocks, scroll: 0, transcriptFocus: false };
     }
     case 'setToolOutput': {
       const blocks = [...s.blocks];
@@ -147,7 +151,7 @@ export function reducer(s: State, a: Action): State {
           break;
         }
       }
-      return { ...s, blocks, scroll: 0 };
+      return { ...s, blocks, scroll: 0, transcriptFocus: false };
     }
     case 'toggleTool': {
       const blocks = [...s.blocks];
@@ -180,7 +184,7 @@ export function reducer(s: State, a: Action): State {
     case 'suggestIdx':
       return { ...s, suggestIdx: a.index };
     case 'runStart':
-      return { ...s, running: true, status: 'running…', scroll: 0 };
+      return { ...s, running: true, status: 'running…', scroll: 0, transcriptFocus: false };
     case 'runEnd':
       return {
         ...s,
@@ -194,6 +198,8 @@ export function reducer(s: State, a: Action): State {
       return { ...s, status: a.text };
     case 'scroll':
       return { ...s, scroll: Math.max(0, s.scroll + a.delta) };
+    case 'setTranscriptFocus':
+      return { ...s, transcriptFocus: a.focus };
     case 'setModal':
       return { ...s, modal: a.modal };
     case 'setModel':
@@ -217,6 +223,7 @@ export function reducer(s: State, a: Action): State {
         history,
         histIdx: history.length,
         scroll: 0,
+        transcriptFocus: false,
         suggestIdx: 0,
       };
     }
@@ -228,7 +235,14 @@ export function reducer(s: State, a: Action): State {
       return { ...s, input, cursor: input.length, histIdx: idx };
     }
     case 'clear':
-      return { ...s, blocks: [], scroll: 0, modal: undefined, suggestIdx: 0 };
+      return {
+        ...s,
+        blocks: [],
+        scroll: 0,
+        transcriptFocus: false,
+        modal: undefined,
+        suggestIdx: 0,
+      };
     default:
       return s;
   }

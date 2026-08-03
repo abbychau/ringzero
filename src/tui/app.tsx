@@ -83,7 +83,11 @@ export function App({
   const runnerRef = useRef(runner);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const layoutRef = useRef<{ start: number; visible: Row[] }>({ start: 0, visible: [] });
+  const layoutRef = useRef<{ start: number; visible: Row[]; height: number }>({
+    start: 0,
+    visible: [],
+    height: 0,
+  });
 
   const slashItems = useMemo(
     () => slashMatches(state.input, runnerRef.current.listPluginCommands()),
@@ -109,7 +113,7 @@ export function App({
     () => windowRows(allRows, transH, state.scroll),
     [allRows, transH, state.scroll],
   );
-  layoutRef.current = { start: win.start, visible: win.visible };
+  layoutRef.current = { start: win.start, visible: win.visible, height: transH };
 
   const pushSys = useCallback(
     (text: string) => dispatch({ type: 'push', block: { tag: 'sys', text } }),
@@ -401,6 +405,34 @@ export function App({
     }
 
     const s = stateRef.current;
+
+    // Transcript focus (mouse wheel/click): ↑/↓ scroll the transcript instead
+    // of the input history; Esc or scrolling back to the bottom returns focus.
+    if (s.transcriptFocus || s.scroll > 0) {
+      if (key.upArrow) {
+        dispatch({ type: 'scroll', delta: 1 });
+        return;
+      }
+      if (key.downArrow) {
+        dispatch({ type: 'scroll', delta: -1 });
+        if (s.scroll - 1 <= 0) dispatch({ type: 'setTranscriptFocus', focus: false });
+        return;
+      }
+      if (key.pageUp) {
+        dispatch({ type: 'scroll', delta: 5 });
+        return;
+      }
+      if (key.pageDown) {
+        dispatch({ type: 'scroll', delta: -5 });
+        if (s.scroll - 5 <= 0) dispatch({ type: 'setTranscriptFocus', focus: false });
+        return;
+      }
+      if (key.escape) {
+        dispatch({ type: 'setTranscriptFocus', focus: false });
+        return;
+      }
+    }
+
     const setInput = (text: string, cursor: number) => dispatch({ type: 'input', text, cursor });
     const insertAtCursor = (t: string) =>
       setInput(s.input.slice(0, s.cursor) + t + s.input.slice(s.cursor), s.cursor + t.length);
@@ -520,18 +552,25 @@ export function App({
   // mouse events are parsed in runTui (filtered out of Ink's stdin); dispatch here.
   useEffect(() => {
     mouseCbRef.current = (e: MouseEventData) => {
+      // Mouse y is 1-based terminal row; header is row 1, so the transcript
+      // starts at row 2 (1-based) below the optional todo strip.
+      const s = stateRef.current;
+      const todosH = s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
+      const lineIdx = e.y - 2 - todosH;
+      const inTranscript = lineIdx >= 0 && lineIdx < layoutRef.current.height;
       if (e.type === 'wheel') {
+        if (!inTranscript) return;
         const d = e.button === 64 ? 2 : e.button === 65 ? -2 : 0;
-        if (d) dispatch({ type: 'scroll', delta: d });
+        if (d) {
+          dispatch({ type: 'scroll', delta: d });
+          dispatch({ type: 'setTranscriptFocus', focus: true });
+        }
       } else if (e.type === 'down') {
-        // Mouse y is 1-based terminal row; header is row 0 (0-based), so the
-        // transcript starts after header + todo strip → line index = y - 2 - todosH.
-        const s = stateRef.current;
-        const todosH = s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
-        const lineIdx = e.y - 2 - todosH;
+        if (!inTranscript) return;
+        dispatch({ type: 'setTranscriptFocus', focus: true });
         const row = layoutRef.current.visible[lineIdx];
         if (row) {
-          const b = stateRef.current.blocks[row.blockIdx];
+          const b = s.blocks[row.blockIdx];
           if (b && b.tag === 'tool' && b.output)
             dispatch({ type: 'toggleTool', index: row.blockIdx });
         }

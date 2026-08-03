@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { homedir } from 'node:os';
-import { sanitizeEnv, bashTool } from '../src/tools/bash.js';
+import { sanitizeEnv, bashTool, decodeOutput } from '../src/tools/bash.js';
 import type { ToolContext } from '../src/kernel/types.js';
 
 const ctx: ToolContext = {
@@ -71,4 +71,63 @@ test('bash tool clamps timeout_ms to the 1s..10min range', async () => {
     ctx,
   );
   assert.ok(out2.includes('7'), `got: ${out2}`);
+});
+
+test('decodeOutput passes valid UTF-8 through (incl. CJK)', () => {
+  assert.equal(decodeOutput(Buffer.from('你好世界', 'utf8')), '你好世界');
+  assert.equal(decodeOutput(Buffer.from('plain ascii\n', 'ascii')), 'plain ascii\n');
+});
+
+test('decodeOutput falls back to the forced legacy encoding (GBK)', () => {
+  process.env.RINGZERO_OS_ENCODING = 'gbk';
+  try {
+    // 中文 in GBK = D6D0 CEC4 (invalid UTF-8, would otherwise show as mojibake)
+    assert.equal(decodeOutput(Buffer.from([0xd6, 0xd0, 0xce, 0xc4])), '中文');
+    // valid UTF-8 still wins even with an override
+    assert.equal(decodeOutput(Buffer.from('你好', 'utf8')), '你好');
+  } finally {
+    delete process.env.RINGZERO_OS_ENCODING;
+  }
+});
+
+test('decodeOutput falls back to Big5 when forced', () => {
+  process.env.RINGZERO_OS_ENCODING = 'big5';
+  try {
+    // 中文 in Big5 = A4A4 A4E5
+    assert.equal(decodeOutput(Buffer.from([0xa4, 0xa4, 0xa4, 0xe5])), '中文');
+  } finally {
+    delete process.env.RINGZERO_OS_ENCODING;
+  }
+});
+
+test('decodeOutput tolerates an unsupported forced encoding', () => {
+  process.env.RINGZERO_OS_ENCODING = 'not-a-encoding';
+  try {
+    assert.equal(decodeOutput(Buffer.from([0xd6, 0xd0])), '\uFFFD\uFFFD');
+  } finally {
+    delete process.env.RINGZERO_OS_ENCODING;
+  }
+});
+
+test('bash tool passes UTF-8 CJK output through', async () => {
+  // 你好 written as raw UTF-8 bytes so the command line itself stays ASCII
+  // (survives any shell codepage on Windows CI runners).
+  const out = await bashTool().execute(
+    { command: 'node -e "process.stdout.write(Buffer.from([0xe4,0xbd,0xa0,0xe5,0xa5,0xbd]))"' },
+    ctx,
+  );
+  assert.equal(out, '你好');
+});
+
+test('bash tool decodes legacy-encoded CJK output (GBK)', async () => {
+  process.env.RINGZERO_OS_ENCODING = 'gbk';
+  try {
+    const out = await bashTool().execute(
+      { command: 'node -e "process.stdout.write(Buffer.from([0xd6,0xd0,0xce,0xc4]))"' },
+      ctx,
+    );
+    assert.equal(out, '中文');
+  } finally {
+    delete process.env.RINGZERO_OS_ENCODING;
+  }
 });

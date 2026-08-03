@@ -4,6 +4,58 @@ import type { Tool } from '../kernel/types.js';
 const MAX_OUTPUT_CHARS = 100_000;
 const MAX_BASH_TIMEOUT = 600_000;
 const SECRET_KEY_RE = /(^|_)(key|token|secret|password|passwd|credential|auth)(_|$)/i;
+/** Byte cap before we kill a runaway child (UTF-8 worst case ≈ 4 bytes/char). */
+const MAX_OUTPUT_BYTES = MAX_OUTPUT_CHARS * 4;
+
+/**
+ * Best-effort decode of command output bytes. UTF-8 is the default; if the
+ * bytes are not valid UTF-8 (replacement chars), fall back to the platform's
+ * legacy console codepage — on Windows CJK systems `cmd`/PowerShell emit
+ * GBK/Big5/Shift-JIS unless `chcp 65001` is active. Override with
+ * RINGZERO_OS_ENCODING (e.g. "gbk", "big5", "shift_jis", "utf-8").
+ */
+export function decodeOutput(buf: Buffer): string {
+  const utf8 = buf.toString('utf8');
+  if (!utf8.includes('\uFFFD')) return utf8;
+  const enc = legacyEncoding();
+  if (enc) {
+    try {
+      const s = new TextDecoder(enc).decode(buf);
+      if (!s.includes('\uFFFD')) return s;
+    } catch {
+      // encoding not available in this Node build (small-icu) → keep UTF-8
+    }
+  }
+  return utf8;
+}
+
+let legacyEnc: string | undefined;
+
+function legacyEncoding(): string | undefined {
+  const forced = process.env.RINGZERO_OS_ENCODING?.trim().toLowerCase();
+  if (forced === 'utf8' || forced === 'utf-8') return undefined;
+  if (forced) return forced;
+  if (legacyEnc === undefined) legacyEnc = winConsoleEncoding();
+  return legacyEnc;
+}
+
+/** Map the Windows UI locale to its legacy console codepage encoding. */
+function winConsoleEncoding(): string | undefined {
+  if (process.platform !== 'win32') return undefined;
+  const loc = (Intl.DateTimeFormat().resolvedOptions().locale || '').toLowerCase();
+  if (loc.startsWith('zh-cn') || loc.startsWith('zh-sg')) return 'gbk';
+  if (loc.startsWith('zh-tw') || loc.startsWith('zh-hk') || loc.startsWith('zh-mo')) return 'big5';
+  if (loc.startsWith('ja')) return 'shift_jis';
+  if (loc.startsWith('ko')) return 'euc-kr';
+  if (loc.startsWith('th')) return 'windows-874';
+  if (loc.startsWith('ru')) return 'windows-1251';
+  if (loc.startsWith('el')) return 'windows-1253';
+  if (loc.startsWith('tr')) return 'windows-1254';
+  if (loc.startsWith('he')) return 'windows-1255';
+  if (loc.startsWith('ar')) return 'windows-1256';
+  if (loc.startsWith('vi')) return 'windows-1258';
+  return undefined;
+}
 
 /**
  * Environment for child processes with secrets removed, so the model cannot
@@ -86,7 +138,8 @@ export function runCommand(
       env: { ...sanitizeEnv(), FORCE_COLOR: '0', NO_COLOR: '1' },
       signal,
     });
-    let out = '';
+    const chunks: Buffer[] = [];
+    let bytes = 0;
     let settled = false;
     const finish = (fn: () => void): void => {
       if (settled) return;
@@ -94,8 +147,12 @@ export function runCommand(
       fn();
     };
     const onData = (d: Buffer): void => {
-      out += d.toString();
-      if (out.length > MAX_OUTPUT_CHARS) killTree(child);
+      bytes += d.length;
+      if (bytes > MAX_OUTPUT_BYTES) {
+        killTree(child);
+        return; // stop accumulating; decode what we captured at close
+      }
+      chunks.push(d);
     };
     child.stdout?.on('data', onData);
     child.stderr?.on('data', onData);
@@ -117,7 +174,10 @@ export function runCommand(
     child.on('close', (code) => {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
-      const tail = out.slice(-MAX_OUTPUT_CHARS);
+      // Buffer chunks then decode once, so multi-byte sequences split across
+      // 'data' events (or legacy codepage output) are not corrupted.
+      const decoded = decodeOutput(Buffer.concat(chunks));
+      const tail = decoded.slice(-MAX_OUTPUT_CHARS);
       finish(() => resolvePromise(tail + (code === 0 ? '' : `\n[exit code ${code}]`)));
     });
   });
