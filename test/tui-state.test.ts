@@ -146,7 +146,7 @@ test('slashMatches filters commands by prefix (and a lone slash shows all)', () 
   const all = slashMatches('/');
   assert.ok(all.includes('compact'));
   assert.ok(all.includes('exit'));
-  assert.deepEqual(slashMatches('/c'), ['context', 'compact']);
+  assert.deepEqual(slashMatches('/c'), ['context', 'compact', 'checkpoint']);
   assert.deepEqual(slashMatches('/com'), ['compact']);
   // plugin extras are merged and deduped against built-ins
   assert.ok(slashMatches('/', ['mcp-list']).includes('mcp-list'));

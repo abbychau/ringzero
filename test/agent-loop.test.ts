@@ -30,7 +30,11 @@ function makeTool(name: string, fn: (args: Record<string, unknown>) => number | 
 
 const add = makeTool('add', (a) => (a.a as number) + (a.b as number));
 
-type Reply = { text?: string; calls?: { name: string; args: Record<string, unknown> }[] };
+type Reply = {
+  text?: string;
+  thinking?: string;
+  calls?: { name: string; args: Record<string, unknown> }[];
+};
 
 /**
  * A provider that "reasons": it inspects the whole conversation so far and
@@ -43,6 +47,7 @@ function makeScripted(respond: (req: ChatRequest) => Reply): Provider {
     countTokens: (t) => countTokens(t),
     async *chat(req) {
       const r = respond(req);
+      if (r.thinking) yield { type: 'thinking', text: r.thinking };
       if (r.calls) {
         yield {
           type: 'tool_calls',
@@ -233,6 +238,31 @@ test('onBeforeTool plugin hook can block a tool', async () => {
   assert.ok(finalText.includes('[blocked by plugin]'));
 });
 
+test('onToolAfter plugin hook can rewrite tool output', async () => {
+  const provider = scriptedProvider((msgs) => {
+    const last = lastTool(msgs);
+    if (last) return { text: `model saw: ${last.content}` };
+    return { calls: [{ name: 'add', args: { a: 1, b: 2 } }] };
+  });
+  const agent = new Agent({
+    provider,
+    tools: [add],
+    permission: allowAll,
+    onToolAfter: async (name, args, output) => {
+      assert.equal(name, 'add');
+      assert.deepEqual(args, { a: 1, b: 2 });
+      return { output: `rewritten(${output})` };
+    },
+  });
+  const { events, finalText } = await run(agent, 'add');
+  const res = events.find((e) => e.type === 'tool_result') as Extract<
+    AgentEvent,
+    { type: 'tool_result' }
+  >;
+  assert.equal(res.output, 'rewritten(3)');
+  assert.equal(finalText, 'model saw: rewritten(3)');
+});
+
 test('agent aggregates token usage across all model calls (not just the last)', async () => {
   const provider = scriptedProvider((msgs) => {
     const n = msgs.filter((m) => m.role === 'tool').length;
@@ -268,6 +298,30 @@ test('onMessage records the full user/assistant/tool conversation', async () => 
   const toolMsg = recorded[2]!;
   assert.equal(toolMsg.content, '3');
   assert.equal(recorded[3]!.content, 'answer: 3');
+});
+
+test('agent forwards thinking events but does not persist them', async () => {
+  const recorded: SessionMessage[] = [];
+  const provider = scriptedProvider(() => ({ thinking: 'hmm, let me think', text: 'answer' }));
+  const agent = new Agent({
+    provider,
+    tools: [add],
+    permission: allowAll,
+    onMessage: (m) => recorded.push(m),
+  });
+  const { events } = await run(agent, 'hi');
+  const thinking = events.filter((e) => e.type === 'thinking');
+  assert.equal(thinking.length, 1);
+  assert.equal(
+    (thinking[0] as Extract<AgentEvent, { type: 'thinking' }>).text,
+    'hmm, let me think',
+  );
+  // thinking is streamed but never persisted as a session message
+  assert.deepEqual(
+    recorded.map((m) => m.role),
+    ['user', 'assistant'],
+  );
+  assert.ok(recorded.every((m) => !m.content.includes('hmm, let me think')));
 });
 
 test('onCompact fires after auto-compaction and receives the trimmed history', async () => {

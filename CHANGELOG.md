@@ -34,6 +34,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `read_file` outline mode: files >300 lines auto-return a symbol outline
+  (regex-based, per-language) with `mode: "full"` to bypass; explicit `mode`
+  param supported (`src/tools/outline.ts`).
+- Reasoning support: `thinking` events streamed from `reasoning_content`
+  (OpenAI-compat) and Anthropic `thinking` blocks; shown collapsed in the TUI;
+  never persisted to session history. Provider usage no longer emits
+  `cacheWrite: undefined` fields.
+- Git integration: `git_status` / `git_diff` tools; auto-checkpoint of the
+  worktree (tracked + untracked, temp-index snapshot → shadow ref) before the
+  first tool call of each run; `/diff`, `/status`, `/checkpoint`, `/rollback`
+  slash commands (TUI + REPL). Rollback restores index + worktree without
+  moving HEAD (`src/tools/git.ts`).
+- Post-tool verify loop: `onToolAfter` plugin hook (rewrite tool results) and
+  `RINGZERO_VERIFY` env — a command (e.g. `npm test`) run once after the first
+  write/edit of a run, with its output fed back into context
+  (`src/cli/verify.ts`).
 - `onCompact` option on `Agent` (with a dedicated test).
 - Workspace sandbox section in the README and docs for the new environment
   variables.

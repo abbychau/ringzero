@@ -13,6 +13,7 @@ test('loadPlugins loads a plugin and registers tools/commands/hooks', async () =
       api.registerTool({ definition: { name: "plugin_hello", description: "hello", inputSchema: {} }, execute: async () => "world" });
       api.registerCommand("hello", (args, a) => { a.say("hello " + args.join(" ")); });
       api.onToolBefore(async ({ name }) => name === "bash" ? { allowed: false } : undefined);
+      api.onToolAfter(async ({ output }) => output === "world" ? { output: "world!" } : undefined);
     }`,
   );
   const loaded = await loadPlugins([dir]);
@@ -22,12 +23,14 @@ test('loadPlugins loads a plugin and registers tools/commands/hooks', async () =
   const tools: any[] = [];
   const commands = new Map<string, any>();
   let hook: any;
+  let afterHook: any;
   const says: string[] = [];
   const api: PluginApi = {
     name: 'hello',
     registerTool: (t) => tools.push(t),
     registerCommand: (n, f) => commands.set(n, f),
     onToolBefore: (f) => (hook = f),
+    onToolAfter: (f) => (afterHook = f),
     say: (t) => says.push(t),
   };
   await loaded[0]!.init(api);
@@ -39,6 +42,10 @@ test('loadPlugins loads a plugin and registers tools/commands/hooks', async () =
   assert.deepEqual(says, ['hello world']);
   const r = await hook({ name: 'bash', args: {} });
   assert.deepEqual(r, { allowed: false });
+  const ar = await afterHook({ name: 'plugin_hello', args: {}, output: 'world' });
+  assert.deepEqual(ar, { output: 'world!' });
+  const ar2 = await afterHook({ name: 'plugin_hello', args: {}, output: 'other' });
+  assert.equal(ar2, undefined);
 
   rmSync(dir, { recursive: true, force: true });
 });

@@ -18,12 +18,28 @@ export type ToolBeforeHook = (
   input: ToolBeforeInput,
 ) => Promise<ToolBeforeResult | void> | ToolBeforeResult | void;
 
+export interface ToolAfterInput {
+  name: string;
+  args: Record<string, unknown>;
+  output: string;
+}
+
+export interface ToolAfterResult {
+  output?: string;
+}
+
+/** Inspect or rewrite a tool result before it is fed back to the model. */
+export type ToolAfterHook = (
+  input: ToolAfterInput,
+) => Promise<ToolAfterResult | void> | ToolAfterResult | void;
+
 /** API handed to a plugin's init(). */
 export interface PluginApi {
   readonly name: string;
   registerTool(tool: Tool): void;
   registerCommand(name: string, fn: CommandFn): void;
   onToolBefore(fn: ToolBeforeHook): void;
+  onToolAfter(fn: ToolAfterHook): void;
   /** Push a line into the active UI transcript (falls back to console.log). */
   say(text: string): void;
 }

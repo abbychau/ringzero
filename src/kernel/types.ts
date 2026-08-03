@@ -61,6 +61,7 @@ export interface ChatRequest {
 /** Streamed events emitted by a provider chat() call. */
 export type ChatEvent =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; text: string }
   | { type: 'tool_calls'; calls: ToolCall[] }
   | { type: 'finish'; usage?: TokenUsage; finishReason?: string };
 

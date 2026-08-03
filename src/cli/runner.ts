@@ -1,5 +1,5 @@
 import type { AppConfig } from '../config/config.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SessionStore } from '../session/store.js';
@@ -7,6 +7,13 @@ import { Agent } from '../kernel/agent.js';
 import { defaultTools } from '../tools/index.js';
 import { createTaskTool } from '../tools/task.js';
 import { createDefaultProvider } from '../providers/registry.js';
+import {
+  createCheckpoint,
+  restoreCheckpoint,
+  setCheckpoint,
+  gitDiff as gitDiffOutput,
+  gitStatus as gitStatusOutput,
+} from '../tools/git.js';
 import { listSkills, loadSkill, type SkillInfo } from '../skills/loader.js';
 import {
   loadPlugins,
@@ -14,9 +21,12 @@ import {
   type CommandFn,
   type ToolBeforeInput,
   type ToolBeforeResult,
+  type ToolAfterInput,
+  type ToolAfterResult,
 } from '../plugin/index.js';
 import { createMcpTools } from '../mcp/index.js';
 import { loadMcpConfig } from '../mcp/config.js';
+import { makeVerifyHook } from './verify.js';
 import { PermissionGate, type AskResponse } from '../permission/gate.js';
 import { compactHistory, estimateContextTokens } from '../kernel/context.js';
 import type { Provider, SessionMessage, Tool } from '../kernel/types.js';
@@ -36,12 +46,14 @@ export class Runner {
   sessionId?: string;
   model: string;
   private history: SessionMessage[];
+  private checkpointsDir: string;
   private enabledSkills: string[] = [];
   private mcpTools: Tool[] = [];
   private mcpInited = false;
   private pluginTools: Tool[] = [];
   private pluginCommands = new Map<string, { fn: CommandFn; api: PluginApi }>();
   private pluginToolHooks: ((i: ToolBeforeInput) => Promise<ToolBeforeResult | void>)[] = [];
+  private pluginToolAfterHooks: ((i: ToolAfterInput) => Promise<ToolAfterResult | void>)[] = [];
   private skillTools = new Map<string, Tool[]>();
   /** Set by the UI to receive plugin say() output. */
   pluginSay?: (text: string) => void;
@@ -49,6 +61,7 @@ export class Runner {
   constructor(config: AppConfig, opts: RunnerOptions = {}) {
     this.config = config;
     this.store = new SessionStore(config.sessionsDir);
+    this.checkpointsDir = join(config.home, '.ringzero', 'checkpoints');
     this.sessionId = opts.sessionId;
     this.history = this.sessionId ? this.store.load(this.sessionId) : [];
     this.model = opts.model ?? config.env.model;
@@ -101,6 +114,14 @@ export class Runner {
       ...this.pluginTools,
       ...this.mcpTools,
     ];
+    // Snapshot the worktree once per run, before the first tool call, so
+    // /rollback can undo everything the agent did in this run.
+    let checkpointed = false;
+    // Fresh verify hook per run: it fires at most once after the first
+    // write/edit so the model reacts to a broken build/test early.
+    const verifyHook = this.config.verifyCommand
+      ? makeVerifyHook(this.config.verifyCommand, this.config.cwd)
+      : undefined;
     return new Agent({
       provider,
       tools,
@@ -115,6 +136,10 @@ export class Runner {
       maxSteps: this.config.maxSteps,
       signal,
       onBeforeTool: async (name, args) => {
+        if (!checkpointed && this.sessionId) {
+          checkpointed = true;
+          this.checkpoint(this.sessionId);
+        }
         let current = args;
         for (const hook of this.pluginToolHooks) {
           const r = await hook({ name, args: current });
@@ -122,6 +147,18 @@ export class Runner {
           if (r?.args) current = r.args;
         }
         return { args: current };
+      },
+      onToolAfter: async (name, args, output) => {
+        let current = output;
+        for (const hook of this.pluginToolAfterHooks) {
+          const r = await hook({ name, args, output: current });
+          if (r?.output !== undefined) current = r.output;
+        }
+        if (verifyHook) {
+          const r = await verifyHook(name, args, current);
+          if (r?.output !== undefined) current = r.output;
+        }
+        return current === output ? undefined : { output: current };
       },
       onMessage: (m) => {
         this.ensureSession(m.content.slice(0, 48) || 'session');
@@ -175,6 +212,7 @@ export class Runner {
       registerTool: (t) => this.pluginTools.push(t),
       registerCommand: (cmd, fn) => this.pluginCommands.set(cmd, { fn, api }),
       onToolBefore: (fn) => this.pluginToolHooks.push(async (i) => fn(i)),
+      onToolAfter: (fn) => this.pluginToolAfterHooks.push(async (i) => fn(i)),
       say: (text) => {
         if (this.pluginSay) this.pluginSay(text);
         else console.log(`[${name}] ${text}`);
@@ -256,5 +294,71 @@ export class Runner {
   reset(): void {
     this.sessionId = undefined;
     this.history = [];
+  }
+
+  // ---- Git checkpoints -------------------------------------------------------
+
+  gitStatus(): string {
+    return gitStatusOutput(this.config.cwd);
+  }
+
+  gitDiff(): string {
+    return gitDiffOutput(this.config.cwd);
+  }
+
+  /** Snapshot the worktree before agent changes; returns the sha or null. */
+  checkpoint(sessionId = this.sessionId): string | null {
+    if (!sessionId) return null;
+    const ref = this.checkpointRef(sessionId);
+    const sha = createCheckpoint(this.config.cwd, ref);
+    if (!sha) return null;
+    const stack = this.loadCheckpointStack(sessionId);
+    stack.push(sha);
+    this.saveCheckpointStack(sessionId, stack);
+    return sha;
+  }
+
+  /** Restore the worktree to the most recent checkpoint; returns the sha or null. */
+  rollback(sessionId = this.sessionId): string | null {
+    if (!sessionId) return null;
+    const stack = this.loadCheckpointStack(sessionId);
+    const sha = stack.pop();
+    if (!sha) return null;
+    const ref = this.checkpointRef(sessionId);
+    if (!restoreCheckpoint(this.config.cwd, sha)) {
+      stack.push(sha);
+      this.saveCheckpointStack(sessionId, stack);
+      return null;
+    }
+    setCheckpoint(this.config.cwd, ref, stack[stack.length - 1] ?? null);
+    this.saveCheckpointStack(sessionId, stack);
+    return sha;
+  }
+
+  private checkpointRef(sessionId: string): string {
+    return `refs/ringzero/checkpoints/${sessionId}`;
+  }
+
+  private checkpointFile(sessionId: string): string {
+    return join(this.checkpointsDir, `${sessionId}.json`);
+  }
+
+  private loadCheckpointStack(sessionId: string): string[] {
+    try {
+      const raw = readFileSync(this.checkpointFile(sessionId), 'utf8');
+      const arr: unknown = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.filter((s): s is string => typeof s === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private saveCheckpointStack(sessionId: string, stack: string[]): void {
+    try {
+      mkdirSync(this.checkpointsDir, { recursive: true });
+      writeFileSync(this.checkpointFile(sessionId), JSON.stringify(stack));
+    } catch {
+      /* ignore */
+    }
   }
 }

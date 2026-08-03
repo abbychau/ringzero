@@ -93,7 +93,7 @@ async function handleSlash(
   switch (cmd) {
     case 'help':
       console.log(
-        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /new  /exit',
+        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /checkpoint  /rollback  /new  /exit',
       );
       break;
     case 'usage':
@@ -183,6 +183,24 @@ async function handleSlash(
     case 'exit':
       rl.close();
       break;
+    case 'diff':
+      console.log(runner.gitDiff().slice(0, 2000) || '(no changes)');
+      break;
+    case 'status':
+      console.log(runner.gitStatus());
+      break;
+    case 'checkpoint': {
+      const sha = runner.checkpoint();
+      console.log(
+        sha ? `checkpoint saved (${sha.slice(0, 8)})` : '(no session or no changes to snapshot)',
+      );
+      break;
+    }
+    case 'rollback': {
+      const sha = runner.rollback();
+      console.log(sha ? `rolled back to ${sha.slice(0, 8)}` : '(no checkpoints for this session)');
+      break;
+    }
     default:
       if (cmd && (await runner.runPluginCommand(cmd, rest))) break;
       console.log(`unknown command: /${cmd}`);

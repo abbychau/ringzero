@@ -35,6 +35,8 @@ interface ToolCallDelta {
 
 interface ChatChunkDelta {
   content?: string | null;
+  /** Reasoning models (DeepSeek, o-series…) stream thinking here. */
+  reasoning_content?: string | null;
   tool_calls?: ToolCallDelta[];
 }
 
@@ -138,11 +140,13 @@ export function createOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
           continue;
         }
         if (chunk.usage) {
+          const cacheRead = chunk.usage.prompt_tokens_details?.cached_tokens;
+          const cacheWrite = chunk.usage.prompt_tokens_details?.cache_creation_input_tokens;
           usage = {
             input: chunk.usage.prompt_tokens ?? 0,
             output: chunk.usage.completion_tokens ?? 0,
-            cacheRead: chunk.usage.prompt_tokens_details?.cached_tokens,
-            cacheWrite: chunk.usage.prompt_tokens_details?.cache_creation_input_tokens,
+            ...(cacheRead !== undefined ? { cacheRead } : {}),
+            ...(cacheWrite !== undefined ? { cacheWrite } : {}),
           };
         }
         const choice = chunk.choices?.[0];
@@ -151,6 +155,7 @@ export function createOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
         const delta = choice.delta;
         if (!delta) continue;
         if (delta.content) yield { type: 'text', text: delta.content };
+        if (delta.reasoning_content) yield { type: 'thinking', text: delta.reasoning_content };
         if (Array.isArray(delta.tool_calls)) {
           for (const tc of delta.tool_calls) {
             const idx = tc.index ?? 0;

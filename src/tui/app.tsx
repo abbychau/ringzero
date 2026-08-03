@@ -130,6 +130,7 @@ export function App({
       try {
         for await (const ev of agent.run(prompt)) {
           if (ev.type === 'text') dispatch({ type: 'appendAssistant', delta: ev.text });
+          else if (ev.type === 'thinking') dispatch({ type: 'appendThinking', delta: ev.text });
           else if (ev.type === 'tool_start')
             dispatch({
               type: 'push',

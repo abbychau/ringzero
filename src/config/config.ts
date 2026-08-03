@@ -19,6 +19,8 @@ export interface AppConfig {
   systemPrompt: string[];
   favoriteModels: string[];
   permissions: Record<string, PermissionRule>;
+  /** Optional shell command run after write/edit tools (RINGZERO_VERIFY). */
+  verifyCommand?: string;
 }
 
 const DEFAULT_SYSTEM = `You are RingZero, a minimal, token-efficient coding agent.
@@ -81,6 +83,7 @@ export function loadConfig(): AppConfig {
     maxSteps: num(process.env.RINGZERO_MAX_STEPS, 24),
     systemPrompt,
     favoriteModels: favoriteModels.length ? favoriteModels : [env.model],
+    verifyCommand: process.env.RINGZERO_VERIFY || undefined,
     permissions: {
       read_file: 'allow',
       grep: 'allow',

@@ -16,6 +16,7 @@ import { PermissionGate } from '../permission/gate.js';
 
 export type AgentEvent =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; text: string }
   | { type: 'tool_start'; name: string; args: string }
   | { type: 'tool_result'; name: string; output: string; truncated: boolean }
   | { type: 'permission'; name: string; allowed: boolean }
@@ -52,6 +53,12 @@ export interface AgentOptions {
     name: string,
     args: Record<string, unknown>,
   ) => Promise<{ allowed?: boolean; args?: Record<string, unknown> } | undefined>;
+  /** Plugin hook: inspect or rewrite a tool result before it is fed back to the model. */
+  onToolAfter?: (
+    name: string,
+    args: Record<string, unknown>,
+    output: string,
+  ) => Promise<{ output?: string } | undefined> | { output?: string } | undefined;
 }
 
 function toProviderMessages(history: SessionMessage[]): ProviderMessage[] {
@@ -169,6 +176,10 @@ export class Agent {
             if (ev.type === 'text') {
               text += ev.text;
               yield emit({ type: 'text', text: ev.text });
+            } else if (ev.type === 'thinking') {
+              // Reasoning text is streamed to the UI but never persisted: it is
+              // provider-specific and must not be replayed as conversation.
+              yield emit({ type: 'thinking', text: ev.text });
             } else if (ev.type === 'tool_calls') {
               calls.push(...ev.calls);
             } else if (ev.type === 'finish') {
@@ -293,11 +304,19 @@ export class Agent {
           } catch (err) {
             output = `error: ${err instanceof Error ? err.message : String(err)}`;
           }
-          const { text: truncated, truncated: wasTruncated } = truncateOutput(
-            output,
-            this.opts.maxToolOutputChars,
-          );
-          return { call, truncated, wasTruncated };
+          const first = truncateOutput(output, this.opts.maxToolOutputChars);
+          let text = first.text;
+          let wasTruncated = first.truncated;
+          if (this.opts.onToolAfter) {
+            const r = await this.opts.onToolAfter(call.name, args, text);
+            if (r && r.output !== undefined) {
+              // Rewrites are re-truncated so a hook can't blow the budget.
+              const again = truncateOutput(r.output, this.opts.maxToolOutputChars);
+              text = again.text;
+              wasTruncated = again.truncated;
+            }
+          }
+          return { call, truncated: text, wasTruncated };
         }),
       );
       for (const { call, truncated, wasTruncated } of results) {

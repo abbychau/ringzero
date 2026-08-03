@@ -35,13 +35,20 @@ interface AnthropicContentBlock {
   type?: string;
   id?: string;
   name?: string;
+  thinking?: string;
 }
 
 /** One SSE data line of an Anthropic Messages stream. */
 interface AnthropicEvent {
   index?: number;
   content_block?: AnthropicContentBlock;
-  delta?: { type?: string; text?: string; partial_json?: string; stop_reason?: string };
+  delta?: {
+    type?: string;
+    text?: string;
+    thinking?: string;
+    partial_json?: string;
+    stop_reason?: string;
+  };
   message?: { usage?: AnthropicUsage };
   usage?: AnthropicUsage;
 }
@@ -143,6 +150,7 @@ export function createAnthropicProvider(cfg: AnthropicConfig): Provider {
         number,
         | { type: 'tool_use'; id: string; name: string; args: string }
         | { type: 'text'; text: string }
+        | { type: 'thinking'; text: string }
       >();
 
       for await (const ev of consumeSSE(res.body, req.signal)) {
@@ -156,11 +164,13 @@ export function createAnthropicProvider(cfg: AnthropicConfig): Provider {
           case 'message_start': {
             const u = json.message?.usage;
             if (u) {
+              const cacheRead = u.cache_read_input_tokens;
+              const cacheWrite = u.cache_creation_input_tokens;
               usage = {
                 input: u.input_tokens ?? 0,
                 output: u.output_tokens ?? 0,
-                cacheRead: u.cache_read_input_tokens,
-                cacheWrite: u.cache_creation_input_tokens,
+                ...(cacheRead !== undefined ? { cacheRead } : {}),
+                ...(cacheWrite !== undefined ? { cacheWrite } : {}),
               };
             }
             break;
@@ -171,6 +181,9 @@ export function createAnthropicProvider(cfg: AnthropicConfig): Provider {
             const cb = json.content_block;
             if (cb?.type === 'tool_use') {
               blocks.set(idx, { type: 'tool_use', id: cb.id ?? '', name: cb.name ?? '', args: '' });
+            } else if (cb?.type === 'thinking') {
+              blocks.set(idx, { type: 'thinking', text: cb.thinking ?? '' });
+              if (cb.thinking) yield { type: 'thinking', text: cb.thinking };
             } else {
               blocks.set(idx, { type: 'text', text: '' });
             }
@@ -185,6 +198,11 @@ export function createAnthropicProvider(cfg: AnthropicConfig): Provider {
               if (b.type === 'text') {
                 b.text += json.delta.text;
                 yield { type: 'text', text: json.delta.text ?? '' };
+              }
+            } else if (json.delta?.type === 'thinking_delta') {
+              if (b.type === 'thinking') {
+                b.text += json.delta.thinking ?? '';
+                yield { type: 'thinking', text: json.delta.thinking ?? '' };
               }
             } else if (json.delta?.type === 'input_json_delta') {
               if (b.type === 'tool_use') b.args += json.delta.partial_json ?? '';

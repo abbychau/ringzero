@@ -4,6 +4,7 @@ import { wrapText, truncateWidth } from './term.js';
 export type Block =
   | { tag: 'user'; text: string }
   | { tag: 'assistant'; text: string }
+  | { tag: 'thinking'; text: string; expanded: boolean }
   | { tag: 'tool'; name: string; args: string; output?: string; done: boolean; expanded: boolean }
   | { tag: 'sys'; text: string };
 
@@ -64,6 +65,7 @@ export interface State {
 export type Action =
   | { type: 'push'; block: Block }
   | { type: 'appendAssistant'; delta: string }
+  | { type: 'appendThinking'; delta: string }
   | { type: 'setToolOutput'; output: string; done: boolean; name?: string }
   | { type: 'toggleTool'; index?: number }
   | { type: 'input'; text: string; cursor: number }
@@ -107,6 +109,16 @@ export function reducer(s: State, a: Action): State {
       }
       return { ...s, blocks, scroll: 0 };
     }
+    case 'appendThinking': {
+      const blocks = [...s.blocks];
+      const last = blocks[blocks.length - 1];
+      if (last && last.tag === 'thinking') {
+        blocks[blocks.length - 1] = { ...last, text: last.text + a.delta };
+      } else {
+        blocks.push({ tag: 'thinking', text: a.delta, expanded: false });
+      }
+      return { ...s, blocks, scroll: 0 };
+    }
     case 'setToolOutput': {
       const blocks = [...s.blocks];
       // Match by name (last matching, not-yet-done block) so concurrent tool calls
@@ -127,6 +139,13 @@ export function reducer(s: State, a: Action): State {
         blocks[idx] = {
           ...(blocks[idx] as Extract<Block, { tag: 'tool' }>),
           expanded: !(blocks[idx] as Extract<Block, { tag: 'tool' }>).expanded,
+        };
+        return { ...s, blocks };
+      }
+      if (idx !== undefined && blocks[idx]?.tag === 'thinking') {
+        blocks[idx] = {
+          ...(blocks[idx] as Extract<Block, { tag: 'thinking' }>),
+          expanded: !(blocks[idx] as Extract<Block, { tag: 'thinking' }>).expanded,
         };
         return { ...s, blocks };
       }
@@ -243,6 +262,10 @@ export function slashCommands(): string[] {
     'sessions',
     'resume',
     'new',
+    'diff',
+    'status',
+    'checkpoint',
+    'rollback',
     'exit',
   ];
 }
@@ -258,9 +281,11 @@ export function slashMatches(input: string, extra: string[] = []): string[] {
 }
 
 const TOOL_PREVIEW_LINES = 3;
+const THINKING_PREVIEW_CHARS = 160;
 const PREFIX: Record<Block['tag'], string> = {
   user: '› ',
   assistant: '',
+  thinking: '💭 ',
   tool: '⛏ ',
   sys: '— ',
 };
@@ -285,12 +310,26 @@ function toolLines(b: Extract<Block, { tag: 'tool' }>): string[] {
   return [head, ...b.output.split('\n')];
 }
 
+function thinkingLines(b: Extract<Block, { tag: 'thinking' }>): string[] {
+  if (!b.expanded) {
+    const preview = truncateWidth(b.text.replace(/\s+/g, ' '), THINKING_PREVIEW_CHARS);
+    const more =
+      b.text.length > THINKING_PREVIEW_CHARS ? ` …[${b.text.length} chars · Ctrl+O/mouse]` : '';
+    return [preview + more];
+  }
+  return [b.text];
+}
+
 /** Layout blocks into display rows (each row fits `width`), with block index mapping. */
 export function layoutBlocks(blocks: Block[], width: number): Row[] {
   const rows: Row[] = [];
   blocks.forEach((b, blockIdx) => {
     const lines =
-      b.tag === 'tool' ? toolLines(b as Extract<Block, { tag: 'tool' }>) : [PREFIX[b.tag] + b.text];
+      b.tag === 'tool'
+        ? toolLines(b as Extract<Block, { tag: 'tool' }>)
+        : b.tag === 'thinking'
+          ? thinkingLines(b as Extract<Block, { tag: 'thinking' }>)
+          : [PREFIX[b.tag] + b.text];
     for (const line of lines) {
       for (const wrapped of wrapText(line, Math.max(1, width))) {
         rows.push({ blockIdx, text: wrapped });

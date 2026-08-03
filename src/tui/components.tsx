@@ -14,6 +14,7 @@ import {
 const TAG_STYLE: Record<Block['tag'], { color?: string; bold?: boolean; dim?: boolean }> = {
   user: { color: 'cyan' },
   assistant: {},
+  thinking: { color: 'gray', dim: true },
   tool: { color: 'yellow', bold: true },
   sys: { color: 'magenta' },
 };

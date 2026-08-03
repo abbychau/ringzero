@@ -1,9 +1,12 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, existsSync } from 'node:fs';
-import { resolve, join, basename, dirname, relative, isAbsolute } from 'node:path';
+import { resolve, join, basename, dirname, relative, isAbsolute, extname } from 'node:path';
 import type { Tool, ToolContext } from '../kernel/types.js';
 import { isBinaryBuf } from './fsutil.js';
+import { extractOutline, formatOutline } from './outline.js';
 
 const MAX_READ = 5_000_000;
+/** Files larger than this default to outline mode unless mode/range is given. */
+const OUTLINE_AUTO_LINES = 300;
 
 /**
  * Resolve a tool-supplied path against cwd, then (if a workspace root is
@@ -28,13 +31,18 @@ export function readFileTool(): Tool {
     definition: {
       name: 'read_file',
       description:
-        'Read a text file (optionally a line range via start_line/end_line, 1-based inclusive). If path is a directory, lists its entries. Rejects binary files.',
+        'Read a text file (optionally a line range via start_line/end_line, 1-based inclusive). If path is a directory, lists its entries. Rejects binary files. Large files (>300 lines) return a symbol outline unless mode="full" or a range is given; mode="outline" forces outline.',
       inputSchema: {
         type: 'object',
         properties: {
           path: { type: 'string', description: 'absolute or relative path' },
           start_line: { type: 'number', description: 'first line to read (1-based)' },
           end_line: { type: 'number', description: 'last line to read (1-based, inclusive)' },
+          mode: {
+            type: 'string',
+            enum: ['outline', 'full'],
+            description: 'outline = symbols only; full = raw content',
+          },
         },
         required: ['path'],
       },
@@ -65,8 +73,29 @@ export function readFileTool(): Tool {
       const text = buf.toString('utf8');
       const start = input.start_line !== undefined ? Number(input.start_line) : undefined;
       const end = input.end_line !== undefined ? Number(input.end_line) : undefined;
-      if (start === undefined && end === undefined) return text;
       const lines = text.split(/\r?\n/);
+      const mode =
+        input.mode === 'outline' ? 'outline' : input.mode === 'full' ? 'full' : undefined;
+      // Outline mode: explicit, or automatic for large files without a range.
+      if (
+        mode === 'outline' ||
+        (mode === undefined &&
+          start === undefined &&
+          end === undefined &&
+          lines.length > OUTLINE_AUTO_LINES)
+      ) {
+        const ext = extname(p).slice(1).toLowerCase();
+        const symbols = extractOutline(text, ext);
+        const outline = formatOutline(symbols);
+        const hint =
+          lines.length > OUTLINE_AUTO_LINES
+            ? `pass mode:"full" or start_line/end_line to read content`
+            : `pass mode:"full" to read content`;
+        return `[${lines.length} lines; ${symbols.length} symbols — outline mode; ${hint}]\n${
+          outline || '(no symbols detected)'
+        }`;
+      }
+      if (start === undefined && end === undefined) return text;
       const s = Math.max(1, Math.floor(start ?? 1));
       const e = Math.min(lines.length, Math.floor(end ?? lines.length));
       if (s > e) return `error: start_line (${s}) > end_line (${e})`;

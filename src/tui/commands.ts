@@ -22,7 +22,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   switch (cmd) {
     case 'help':
       pushSys(
-        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+J/Shift+Enter newline',
+        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /checkpoint /rollback /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+J/Shift+Enter newline',
       );
       break;
     case 'usage': {
@@ -133,6 +133,27 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
     case 'exit':
       deps.quit();
       break;
+    case 'diff': {
+      const out = r.gitDiff();
+      pushSys(out.length > 2000 ? `${out.slice(0, 2000)}\n…[truncated]…` : out || '(no changes)');
+      break;
+    }
+    case 'status': {
+      pushSys(r.gitStatus());
+      break;
+    }
+    case 'checkpoint': {
+      const sha = r.checkpoint();
+      pushSys(
+        sha ? `checkpoint saved (${sha.slice(0, 8)})` : '(no session or no changes to snapshot)',
+      );
+      break;
+    }
+    case 'rollback': {
+      const sha = r.rollback();
+      pushSys(sha ? `rolled back to ${sha.slice(0, 8)}` : '(no checkpoints for this session)');
+      break;
+    }
     default:
       if (cmd && (await r.runPluginCommand(cmd, rest))) break;
       pushSys(`unknown command: /${cmd}`);
