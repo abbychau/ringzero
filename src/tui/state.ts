@@ -44,6 +44,15 @@ export interface Usage {
   cacheWrite?: number;
 }
 
+export interface Selection {
+  /** Absolute row index into the layoutBlocks output (survives scrolling). */
+  anchorRow: number;
+  /** Character index (not terminal columns) within the row. */
+  anchorCol: number;
+  headRow: number;
+  headCol: number;
+}
+
 export interface State {
   blocks: Block[];
   input: string;
@@ -62,6 +71,8 @@ export interface State {
   scroll: number;
   /** Mouse wheel/click moved focus to the transcript: ↑/↓ scroll it instead of input history. */
   transcriptFocus: boolean;
+  /** In-app text selection (drag or Shift+arrows); cleared on transcript changes. */
+  selection?: Selection;
   modal?: Modal;
   model: string;
   /** Plan mode banner + gating (read-only until plan approved). */
@@ -89,6 +100,7 @@ export type Action =
   | { type: 'status'; text: string }
   | { type: 'scroll'; delta: number }
   | { type: 'setTranscriptFocus'; focus: boolean }
+  | { type: 'setSelection'; selection: Selection | undefined }
   | { type: 'suggestIdx'; index: number }
   | { type: 'setModal'; modal?: Modal }
   | { type: 'setModel'; model: string }
@@ -123,7 +135,13 @@ export function initial(model: string, planMode = false, yolo = false): State {
 export function reducer(s: State, a: Action): State {
   switch (a.type) {
     case 'push':
-      return { ...s, blocks: [...s.blocks, a.block], scroll: 0, transcriptFocus: false };
+      return {
+        ...s,
+        blocks: [...s.blocks, a.block],
+        scroll: 0,
+        transcriptFocus: false,
+        selection: undefined,
+      };
     case 'appendAssistant': {
       const blocks = [...s.blocks];
       const last = blocks[blocks.length - 1];
@@ -132,7 +150,7 @@ export function reducer(s: State, a: Action): State {
       } else {
         blocks.push({ tag: 'assistant', text: a.delta });
       }
-      return { ...s, blocks, scroll: 0, transcriptFocus: false };
+      return { ...s, blocks, scroll: 0, transcriptFocus: false, selection: undefined };
     }
     case 'appendThinking': {
       const blocks = [...s.blocks];
@@ -142,7 +160,7 @@ export function reducer(s: State, a: Action): State {
       } else {
         blocks.push({ tag: 'thinking', text: a.delta, expanded: false });
       }
-      return { ...s, blocks, scroll: 0, transcriptFocus: false };
+      return { ...s, blocks, scroll: 0, transcriptFocus: false, selection: undefined };
     }
     case 'setToolOutput': {
       const blocks = [...s.blocks];
@@ -155,7 +173,7 @@ export function reducer(s: State, a: Action): State {
           break;
         }
       }
-      return { ...s, blocks, scroll: 0, transcriptFocus: false };
+      return { ...s, blocks, scroll: 0, transcriptFocus: false, selection: undefined };
     }
     case 'toggleTool': {
       const blocks = [...s.blocks];
@@ -165,14 +183,14 @@ export function reducer(s: State, a: Action): State {
           ...(blocks[idx] as Extract<Block, { tag: 'tool' }>),
           expanded: !(blocks[idx] as Extract<Block, { tag: 'tool' }>).expanded,
         };
-        return { ...s, blocks };
+        return { ...s, blocks, selection: undefined };
       }
       if (idx !== undefined && blocks[idx]?.tag === 'thinking') {
         blocks[idx] = {
           ...(blocks[idx] as Extract<Block, { tag: 'thinking' }>),
           expanded: !(blocks[idx] as Extract<Block, { tag: 'thinking' }>).expanded,
         };
-        return { ...s, blocks };
+        return { ...s, blocks, selection: undefined };
       }
       for (let i = blocks.length - 1; i >= 0; i--) {
         const b = blocks[i]!;
@@ -181,14 +199,21 @@ export function reducer(s: State, a: Action): State {
           break;
         }
       }
-      return { ...s, blocks };
+      return { ...s, blocks, selection: undefined };
     }
     case 'input':
       return { ...s, input: a.text, cursor: a.cursor, suggestIdx: 0 };
     case 'suggestIdx':
       return { ...s, suggestIdx: a.index };
     case 'runStart':
-      return { ...s, running: true, status: 'running…', scroll: 0, transcriptFocus: false };
+      return {
+        ...s,
+        running: true,
+        status: 'running…',
+        scroll: 0,
+        transcriptFocus: false,
+        selection: undefined,
+      };
     case 'runEnd':
       return {
         ...s,
@@ -204,6 +229,8 @@ export function reducer(s: State, a: Action): State {
       return { ...s, scroll: Math.max(0, s.scroll + a.delta) };
     case 'setTranscriptFocus':
       return { ...s, transcriptFocus: a.focus };
+    case 'setSelection':
+      return { ...s, selection: a.selection };
     case 'setModal':
       return { ...s, modal: a.modal };
     case 'setModel':
@@ -230,6 +257,7 @@ export function reducer(s: State, a: Action): State {
         histIdx: history.length,
         scroll: 0,
         transcriptFocus: false,
+        selection: undefined,
         suggestIdx: 0,
       };
     }
@@ -246,6 +274,7 @@ export function reducer(s: State, a: Action): State {
         blocks: [],
         scroll: 0,
         transcriptFocus: false,
+        selection: undefined,
         modal: undefined,
         suggestIdx: 0,
       };
@@ -401,4 +430,57 @@ export function windowRows(
   const sc = Math.min(scroll, maxScroll);
   const start = Math.max(0, rows.length - height - sc);
   return { start, visible: rows.slice(start, start + height), maxScroll };
+}
+
+/**
+ * Char range [start, end) covered by the selection on one row (absolute row
+ * index, row length in chars), or null when the row is outside the selection.
+ * End-exclusive; cols are char indices and clamp to the row length.
+ */
+export function selectionRange(
+  sel: Selection,
+  row: number,
+  len: number,
+): { start: number; end: number } | null {
+  const topRow = Math.min(sel.anchorRow, sel.headRow);
+  const bottomRow = Math.max(sel.anchorRow, sel.headRow);
+  if (row < topRow || row > bottomRow) return null;
+  const topCol = sel.anchorRow < sel.headRow ? sel.anchorCol : sel.headCol;
+  const bottomCol = sel.anchorRow < sel.headRow ? sel.headCol : sel.anchorCol;
+  if (row === topRow && row === bottomRow) {
+    const start = Math.min(topCol, bottomCol, len);
+    const end = Math.min(Math.max(topCol, bottomCol), len);
+    return { start, end };
+  }
+  if (row === topRow) return { start: Math.min(topCol, len), end: len };
+  if (row === bottomRow) return { start: 0, end: Math.min(bottomCol, len) };
+  return { start: 0, end: len };
+}
+
+/** The selected text across rows (for Ctrl+Y copy), joined with newlines. */
+export function selectionText(rows: Row[], sel: Selection): string {
+  const topRow = Math.min(sel.anchorRow, sel.headRow);
+  const bottomRow = Math.max(sel.anchorRow, sel.headRow);
+  const out: string[] = [];
+  for (let r = topRow; r <= bottomRow && r < rows.length; r++) {
+    const range = selectionRange(sel, r, rows[r]!.text.length);
+    out.push(range ? rows[r]!.text.slice(range.start, range.end) : '');
+  }
+  return out.join('\n');
+}
+
+/**
+ * Shift+arrow keyboard selection: extend the selection head by `delta` rows,
+ * or start one at `fromRow` when there is no selection yet.
+ */
+export function shiftSelect(
+  sel: Selection | undefined,
+  total: number,
+  fromRow: number,
+  delta: number,
+): Selection {
+  const anchorRow = sel ? sel.anchorRow : fromRow;
+  const anchorCol = sel ? sel.anchorCol : 0;
+  const headRow = Math.max(0, Math.min(total - 1, (sel ? sel.headRow : fromRow) + delta));
+  return { anchorRow, anchorCol, headRow, headCol: sel ? sel.headCol : 0 };
 }

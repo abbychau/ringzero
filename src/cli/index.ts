@@ -25,6 +25,7 @@ Usage:
 
 TUI keys: Enter submit · PgUp/PgDn or mouse wheel scroll
          ↑/↓ history (transcript focus: ↑/↓ scroll · Esc returns to input)
+         drag with mouse to select · Shift+↑/↓ extend · Ctrl+Y copy selection
          Ctrl+C abort/exit · Enter while running injects into the active run
 Env (.env or environment):
   API_URL, API_KEY, MODEL          OpenAI-compatible endpoint (packyapi etc.)

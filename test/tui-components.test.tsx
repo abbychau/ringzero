@@ -9,12 +9,19 @@ import {
   SelectModal,
   InputModal,
   SlashSuggest,
+  TranscriptRow,
 } from '../src/tui/components.js';
 import { initial } from '../src/tui/state.js';
 import { App } from '../src/tui/app.js';
 import { Runner } from '../src/cli/runner.js';
 import { loadConfig } from '../src/config/config.js';
 import type { ImageInput } from '../src/kernel/types.js';
+import chalk from 'chalk';
+
+// Force ANSI output regardless of the runner's TTY/FORCE_COLOR state: under
+// `node --test` the child process pipes stdout, so chalk self-detects level 0
+// and strips all styles. The inverse-video assertion below needs styles on.
+chalk.level = 3;
 
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
 
@@ -162,4 +169,27 @@ test('App shows / command suggestions while typing a slash', async () => {
   assert.ok(f.includes('/help'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('/usage'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('❯ /'), `frame was: ${JSON.stringify(f)}`);
+});
+
+test('TranscriptRow renders the selected slice in inverse video', () => {
+  const { lastFrame } = render(
+    <TranscriptRow
+      block={{ tag: 'user', text: 'abcdef' }}
+      text="abcdef"
+      sel={{ start: 1, end: 4 }}
+    />,
+  );
+  const f = lastFrame()!;
+  assert.ok(f.includes('\x1b[7m'), `frame was: ${JSON.stringify(f)}`);
+  const plain = stripAnsi(f);
+  assert.ok(plain.includes('abcdef'), `frame was: ${JSON.stringify(f)}`);
+});
+
+test('TranscriptRow renders plainly without a selection', () => {
+  const { lastFrame } = render(
+    <TranscriptRow block={{ tag: 'assistant', text: 'hello' }} text="hello" />,
+  );
+  const f = lastFrame()!;
+  assert.ok(!f.includes('\x1b[7m'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(stripAnsi(f).includes('hello'), `frame was: ${JSON.stringify(f)}`);
 });

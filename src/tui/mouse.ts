@@ -1,14 +1,15 @@
 import { PassThrough } from 'node:stream';
 
 export interface MouseEventData {
-  type: 'down' | 'up' | 'wheel';
+  type: 'down' | 'up' | 'wheel' | 'drag';
   button: number;
   x: number;
   y: number;
 }
 
-export const SGR_MOUSE_ENABLE = '\x1b[?1000;1006h';
-export const SGR_MOUSE_DISABLE = '\x1b[?1000;1006l';
+/** Button-event tracking (1002) + SGR coordinates (1006) for drag-select. */
+export const SGR_MOUSE_ENABLE = '\x1b[?1002;1006h';
+export const SGR_MOUSE_DISABLE = '\x1b[?1002;1006l';
 
 /**
  * Scroll delta (rows) for a normalized wheel button: 0 = wheel up, 1 = wheel
@@ -45,14 +46,20 @@ export class MouseParser {
         const x = this.buf.charCodeAt(x10 + 4) - 32;
         const y = this.buf.charCodeAt(x10 + 5) - 32;
         this.buf = this.buf.slice(x10 + 6);
-        const isWheel = (cb & 0x40) !== 0;
+        // X10 third byte = button code + 32: press 32..34, drag 64..66
+        // (code 32..34), wheel 96..97 (code 64..65), release 35 (code 3).
+        const isWheel = (cb & 0x60) === 0x60;
+        const isDrag = (cb & 0x40) !== 0;
         const btn = cb & 0x03;
-        out.push({
-          type: btn === 3 ? 'up' : isWheel ? 'wheel' : 'down',
-          button: isWheel ? (cb & 0x7f) - 64 : btn,
-          x,
-          y,
-        });
+        out.push(
+          btn === 3 && !isWheel && !isDrag
+            ? { type: 'up', button: 3, x, y }
+            : isWheel
+              ? { type: 'wheel', button: cb - 96, x, y }
+              : isDrag
+                ? { type: 'drag', button: btn, x, y }
+                : { type: 'down', button: btn, x, y },
+        );
         continue;
       }
       // SGR sequence
@@ -80,6 +87,9 @@ export class MouseParser {
       if (![b, x, y].every(Number.isFinite)) continue;
       if (release) out.push({ type: 'up', button: b, x, y });
       else if (b >= 64) out.push({ type: 'wheel', button: b - 64, x, y });
+      else if (b >= 32 && b <= 34) out.push({ type: 'drag', button: b - 32, x, y });
+      else if (b === 35)
+        continue; // motion without a button (mode 1003 only)
       else out.push({ type: 'down', button: b, x, y });
     }
     return out;

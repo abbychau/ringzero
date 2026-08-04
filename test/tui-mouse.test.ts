@@ -27,6 +27,30 @@ test('MouseParser parses SGR left/right click and wheel', () => {
   assert.deepEqual(evs[3], { type: 'up', button: 0, x: 10, y: 5 }); // release
 });
 
+test('MouseParser parses SGR drag motion and drag release (1002)', () => {
+  const p = new MouseParser();
+  const evs = p.push('\x1b[<32;10;5M\x1b[<33;12;6M\x1b[<32;14;7m');
+  assert.deepEqual(evs[0], { type: 'drag', button: 0, x: 10, y: 5 }); // left drag
+  assert.deepEqual(evs[1], { type: 'drag', button: 1, x: 12, y: 6 }); // right drag
+  assert.deepEqual(evs[2], { type: 'up', button: 32, x: 14, y: 7 }); // drag release
+});
+
+test('MouseParser skips motion-only SGR 35 (1003-style) and handles X10 drag/wheel/up', () => {
+  const p = new MouseParser();
+  // 35 = motion without a button (mode 1003) → must not produce an event
+  assert.deepEqual(p.push('\x1b[<35;10;5M'), []);
+  // X10 (legacy) drag: cb 64 ('@') = button 0 + drag; x=10 → 42 ('*'), y=5 → 37 ('%')
+  const p2 = new MouseParser();
+  const evs = p2.push('\x1b[M@*%');
+  assert.deepEqual(evs[0], { type: 'drag', button: 0, x: 10, y: 5 });
+  // X10 wheel: cb 96 ('`') = wheel up
+  const p3 = new MouseParser();
+  assert.deepEqual(p3.push('\x1b[M`*%'), [{ type: 'wheel', button: 0, x: 10, y: 5 }]);
+  // X10 release: cb 35 ('#') = button 3 up
+  const p4 = new MouseParser();
+  assert.deepEqual(p4.push('\x1b[M#*%'), [{ type: 'up', button: 3, x: 10, y: 5 }]);
+});
+
 test('MouseParser handles fragmented SGR sequences across chunks', () => {
   const p = new MouseParser();
   assert.deepEqual(p.push('\x1b[<'), []);

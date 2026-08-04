@@ -124,6 +124,13 @@ token-efficient, zero-dep, CJK-first, UX/operability first.
       assistant message / last `n` / full transcript to the OS clipboard
       (zero-dep `clip`/`pbcopy`/`xclip`/`wl-copy`/`xsel`), since mouse drag
       selection is unavailable under mouse-reporting + alternate screen.
+- [x] **P5.7 In-app selection + copy** — mouse mode 1002 (drag) enables
+      drag-selection in the transcript (inverse video); Shift+↑/↓/PgUp/PgDn
+      extends the selection from the keyboard; Ctrl+Y copies the selection
+      via the `/copy` clipboard backend; Esc clears. `/copy [n|all]` stays as
+      the selection-free path (transcript rows are flat text, so per-column
+      highlight is straightforward). CJK-safe: clicks round down to whole
+      double-width characters.
 
 ## P6 — Cost & research
 

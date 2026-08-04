@@ -23,11 +23,29 @@ const TAG_STYLE: Record<Block['tag'], { color?: string; bold?: boolean; dim?: bo
   sys: { color: 'magenta' },
 };
 
-export function TranscriptRow({ block, text }: { block: Block; text: string }): React.JSX.Element {
+export function TranscriptRow({
+  block,
+  text,
+  sel,
+}: {
+  block: Block;
+  text: string;
+  /** Selected char range [start, end) on this row (inverse video). */
+  sel?: { start: number; end: number };
+}): React.JSX.Element {
   const s = TAG_STYLE[block.tag] ?? {};
+  if (!sel || sel.end <= sel.start) {
+    return (
+      <Text color={s.color} bold={s.bold} dimColor={s.dim}>
+        {text}
+      </Text>
+    );
+  }
   return (
     <Text color={s.color} bold={s.bold} dimColor={s.dim}>
-      {text}
+      {text.slice(0, sel.start)}
+      <Text inverse>{text.slice(sel.start, sel.end)}</Text>
+      {text.slice(sel.end)}
     </Text>
   );
 }
@@ -53,6 +71,7 @@ export function StatusBar({
 }): React.JSX.Element {
   const sc = state.scroll > 0 ? `  · ↑${state.scroll} ${visible}/${total}` : '';
   const focus = state.transcriptFocus ? '  · ↑/↓ scroll · Esc to input' : '';
+  const selHint = state.selection ? '  · Ctrl+Y copy · Esc clear' : '';
   const ctx =
     state.ctxTokens !== undefined
       ? `  · ctx≈${(state.ctxTokens / 1000).toFixed(1)}k${budget ? `/${Math.round(budget / 1000)}k` : ''}`
@@ -62,7 +81,7 @@ export function StatusBar({
     : '';
   // Yolo badge is a separate colored element; status text truncates tighter to
   // leave room for it.
-  const statusText = truncateWidth(state.status + sc + focus + ctx + ses, 92);
+  const statusText = truncateWidth(state.status + sc + focus + selHint + ctx + ses, 92);
   return (
     <Box>
       {state.running ? <Spinner /> : <Text dimColor>●</Text>}

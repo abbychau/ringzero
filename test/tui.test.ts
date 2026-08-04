@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { KeyReader, strWidth, wrapText, truncateWidth } from '../src/tui/term.js';
+import { KeyReader, strWidth, wrapText, truncateWidth, colToCharIndex } from '../src/tui/term.js';
 
 test('strWidth counts CJK/fullwidth as 2', () => {
   assert.equal(strWidth('abc'), 3);
@@ -59,4 +59,20 @@ test('KeyReader pageup/pagedown and delete', () => {
   assert.deepEqual(r.next(), { type: 'pageup' });
   assert.deepEqual(r.next(), { type: 'pagedown' });
   assert.deepEqual(r.next(), { type: 'delete' });
+});
+
+test('colToCharIndex maps terminal columns to char indices (CJK-safe)', () => {
+  // plain ascii: 1:1
+  assert.equal(colToCharIndex('abc', 0), 0);
+  assert.equal(colToCharIndex('abc', 2), 2);
+  assert.equal(colToCharIndex('abc', 99), 3);
+  // a click in the left half of a double-width char rounds down to it
+  assert.equal(colToCharIndex('中文', 1), 0); // col 1 → char 0 (中 starts at col 0)
+  assert.equal(colToCharIndex('中文', 2), 1); // col 2 → char 1
+  assert.equal(colToCharIndex('中文', 3), 1); // col 3 → still char 1 (文)
+  assert.equal(colToCharIndex('中文', 4), 2); // past the end → length
+  // mixed widths
+  assert.equal(colToCharIndex('a中b', 1), 1);
+  assert.equal(colToCharIndex('a中b', 2), 1); // col 2 is 中's second cell
+  assert.equal(colToCharIndex('a中b', 3), 2);
 });

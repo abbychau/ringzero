@@ -155,6 +155,10 @@ terminals the sidebar hides and the header/status bar return to full width.
 `Ctrl+O` or **mouse click** expand/collapse tool output · `Ctrl+T` toggle the todo list ·
 `Ctrl+A/E` line start/end ·
 `Ctrl+U` clear line · `Ctrl+W` delete word · `Ctrl+C` abort run / exit.
+**Drag with the mouse to select text** (or `Shift+↑/↓`, `Shift+PgUp/PgDn` after
+clicking the transcript) and press `Ctrl+Y` to copy the selection to the system
+clipboard; `Esc` clears the selection. Mouse-driven selection is CJK-safe:
+a click on a wide character selects the whole character.
 While the agent is running, **typing + Enter injects your message mid-run**
 (the current stream aborts and the run continues with your input).
 Permission prompts appear as an inline modal: `y` yes · `n` no · `a` always · `v` never.

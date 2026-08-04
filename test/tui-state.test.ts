@@ -11,7 +11,11 @@ import {
   inputLineCol,
   inputLines,
   slashMatches,
+  selectionRange,
+  selectionText,
+  shiftSelect,
   type Block,
+  type Selection,
 } from '../src/tui/state.js';
 
 test('reducer appends and streams assistant text', () => {
@@ -223,4 +227,140 @@ test('reducer scroll clamps at 0', () => {
   assert.equal(s.scroll, 2);
   s = reducer(s, { type: 'scroll', delta: -99 });
   assert.equal(s.scroll, 0);
+});
+
+test('reducer setSelection stores and structural changes clear it', () => {
+  let s = initial('m');
+  const sel: Selection = { anchorRow: 0, anchorCol: 0, headRow: 1, headCol: 3 };
+  s = reducer(s, { type: 'setSelection', selection: sel });
+  assert.deepEqual(s.selection, sel);
+  s = reducer(s, { type: 'setSelection', selection: undefined });
+  assert.equal(s.selection, undefined);
+
+  const cases: { name: string; apply: (st: typeof s) => typeof s }[] = [
+    {
+      name: 'push',
+      apply: (st) => reducer(st, { type: 'push', block: { tag: 'sys', text: 'x' } }),
+    },
+    {
+      name: 'appendAssistant',
+      apply: (st) => reducer(st, { type: 'appendAssistant', delta: 'x' }),
+    },
+    { name: 'appendThinking', apply: (st) => reducer(st, { type: 'appendThinking', delta: 'x' }) },
+    {
+      name: 'setToolOutput',
+      apply: (st) => reducer(st, { type: 'setToolOutput', output: 'o', done: true }),
+    },
+    { name: 'toggleTool', apply: (st) => reducer(st, { type: 'toggleTool' }) },
+    { name: 'submit', apply: (st) => reducer(st, { type: 'submit', text: 'hi' }) },
+    { name: 'runStart', apply: (st) => reducer(st, { type: 'runStart' }) },
+    { name: 'clear', apply: (st) => reducer(st, { type: 'clear' }) },
+  ];
+  for (const c of cases) {
+    s = reducer(initial('m'), { type: 'setSelection', selection: sel });
+    const out = c.apply(s);
+    assert.equal(out.selection, undefined, `selection must clear on ${c.name}`);
+  }
+});
+
+test('selectionRange covers single row, multi-row, reversed, and clamps', () => {
+  // single row, normal order
+  assert.deepEqual(selectionRange({ anchorRow: 1, anchorCol: 1, headRow: 1, headCol: 3 }, 1, 10), {
+    start: 1,
+    end: 3,
+  });
+  // single row, reversed cols
+  assert.deepEqual(selectionRange({ anchorRow: 1, anchorCol: 3, headRow: 1, headCol: 1 }, 1, 10), {
+    start: 1,
+    end: 3,
+  });
+  // rows outside the selection are null
+  assert.equal(selectionRange({ anchorRow: 1, anchorCol: 1, headRow: 3, headCol: 3 }, 0, 10), null);
+  assert.equal(selectionRange({ anchorRow: 1, anchorCol: 1, headRow: 3, headCol: 3 }, 4, 10), null);
+  // top row: from anchor col to end
+  assert.deepEqual(selectionRange({ anchorRow: 1, anchorCol: 2, headRow: 3, headCol: 3 }, 1, 10), {
+    start: 2,
+    end: 10,
+  });
+  // middle row: whole line
+  assert.deepEqual(selectionRange({ anchorRow: 1, anchorCol: 2, headRow: 3, headCol: 3 }, 2, 10), {
+    start: 0,
+    end: 10,
+  });
+  // bottom row: from 0 to head col
+  assert.deepEqual(selectionRange({ anchorRow: 1, anchorCol: 2, headRow: 3, headCol: 3 }, 3, 10), {
+    start: 0,
+    end: 3,
+  });
+  // selection upwards (head above anchor) still resolves top/bottom
+  assert.deepEqual(selectionRange({ anchorRow: 3, anchorCol: 4, headRow: 1, headCol: 2 }, 1, 10), {
+    start: 2,
+    end: 10,
+  });
+  assert.deepEqual(selectionRange({ anchorRow: 3, anchorCol: 4, headRow: 1, headCol: 2 }, 3, 10), {
+    start: 0,
+    end: 4,
+  });
+  // cols clamp to row length
+  assert.deepEqual(selectionRange({ anchorRow: 1, anchorCol: 0, headRow: 1, headCol: 99 }, 1, 5), {
+    start: 0,
+    end: 5,
+  });
+});
+
+test('selectionText joins rows with newlines and honors col ranges', () => {
+  const rows = [
+    { blockIdx: 0, text: 'aa' },
+    { blockIdx: 0, text: 'bbb' },
+    { blockIdx: 0, text: 'cc' },
+  ];
+  assert.equal(
+    selectionText(rows, { anchorRow: 0, anchorCol: 1, headRow: 2, headCol: 1 }),
+    'a\nbbb\nc',
+  );
+  // single row slice
+  assert.equal(selectionText(rows, { anchorRow: 1, anchorCol: 0, headRow: 1, headCol: 2 }), 'bb');
+  // reversed order still reads top→bottom
+  assert.equal(
+    selectionText(rows, { anchorRow: 2, anchorCol: 1, headRow: 0, headCol: 1 }),
+    'a\nbbb\nc',
+  );
+  // out-of-range rows are skipped
+  assert.equal(selectionText(rows, { anchorRow: 5, anchorCol: 0, headRow: 7, headCol: 1 }), '');
+});
+
+test('shiftSelect starts a selection at fromRow and extends it, clamped', () => {
+  const rows = Array.from({ length: 10 }, (_, i) => ({ blockIdx: 0, text: `r${i}` }));
+  // no selection yet → anchor at fromRow, head one row further
+  assert.deepEqual(shiftSelect(undefined, rows.length, 4, -1), {
+    anchorRow: 4,
+    anchorCol: 0,
+    headRow: 3,
+    headCol: 0,
+  });
+  // extend an existing selection
+  assert.deepEqual(
+    shiftSelect({ anchorRow: 4, anchorCol: 0, headRow: 3, headCol: 0 }, rows.length, 4, 1),
+    { anchorRow: 4, anchorCol: 0, headRow: 4, headCol: 0 },
+  );
+  // clamps at the top
+  assert.deepEqual(
+    shiftSelect({ anchorRow: 4, anchorCol: 0, headRow: 3, headCol: 0 }, rows.length, 4, -9),
+    {
+      anchorRow: 4,
+      anchorCol: 0,
+      headRow: 0,
+      headCol: 0,
+    },
+  );
+  // clamps at the bottom
+  assert.deepEqual(
+    shiftSelect({ anchorRow: 4, anchorCol: 0, headRow: 3, headCol: 0 }, rows.length, 4, 99),
+    {
+      anchorRow: 4,
+      anchorCol: 0,
+      headRow: 9,
+      headCol: 0,
+    },
+  );
 });

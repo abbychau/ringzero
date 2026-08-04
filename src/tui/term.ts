@@ -136,6 +136,21 @@ export function truncateWidth(s: string, width: number): string {
   return out;
 }
 
+/**
+ * Character index in `text` whose display width matches terminal column `col`
+ * (0-based). Rounds down so a double-width (CJK) char never splits.
+ */
+export function colToCharIndex(text: string, col: number): number {
+  if (col <= 0) return 0;
+  let w = 0;
+  for (let i = 0; i < text.length; i++) {
+    const cw = charWidth(text[i]!);
+    if (w + cw > col) return i;
+    w += cw;
+  }
+  return text.length;
+}
+
 function utf8SeqLen(b: number): number {
   if (b < 0x80) return 1;
   if ((b & 0xe0) === 0xc0) return 2;

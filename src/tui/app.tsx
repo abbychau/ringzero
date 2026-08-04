@@ -14,6 +14,9 @@ import {
   windowRows,
   inputLines,
   slashMatches,
+  selectionRange,
+  selectionText,
+  shiftSelect,
   type Modal,
   type Row,
   type Usage,
@@ -36,7 +39,8 @@ import {
   SearchModal,
   SlashSuggest,
 } from './components.js';
-import { truncateWidth } from './term.js';
+import { truncateWidth, colToCharIndex } from './term.js';
+import { copyToClipboard } from './clipboard.js';
 import {
   MouseParser,
   FilteredStdin,
@@ -142,6 +146,8 @@ export function App({
     height: 0,
     mainW: 0,
   });
+  /** Mouse-down position while dragging: { row, col, moved } in layout rows. */
+  const dragRef = useRef<{ row: number; col: number; moved: boolean } | null>(null);
 
   const slashItems = useMemo(
     () => slashMatches(state.input, runnerRef.current.listPluginCommands()),
@@ -514,9 +520,60 @@ export function App({
 
     const s = stateRef.current;
 
+    // Copy selection to the clipboard (Ctrl+Y) — works whenever a selection
+    // exists, whether or not the transcript has focus.
+    if (key.ctrl && input === 'y') {
+      const sel = s.selection;
+      if (sel) {
+        const text = selectionText(allRows, sel);
+        if (text) {
+          pushSys('copying selection…');
+          void copyToClipboard(text).then((ok) => {
+            pushSys(
+              ok
+                ? `copied selection · ${text.length.toLocaleString()} chars to clipboard`
+                : '(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)',
+            );
+          });
+        } else {
+          pushSys('(empty selection)');
+        }
+      }
+      return;
+    }
+
     // Transcript focus (mouse wheel/click): ↑/↓ scroll the transcript instead
     // of the input history; Esc or scrolling back to the bottom returns focus.
     if (s.transcriptFocus || s.scroll > 0) {
+      const fromRow = Math.max(0, layoutRef.current.start + layoutRef.current.visible.length - 1);
+      if (key.upArrow && key.shift) {
+        dispatch({
+          type: 'setSelection',
+          selection: shiftSelect(s.selection, allRows.length, fromRow, -1),
+        });
+        return;
+      }
+      if (key.downArrow && key.shift) {
+        dispatch({
+          type: 'setSelection',
+          selection: shiftSelect(s.selection, allRows.length, fromRow, 1),
+        });
+        return;
+      }
+      if (key.pageUp && key.shift) {
+        dispatch({
+          type: 'setSelection',
+          selection: shiftSelect(s.selection, allRows.length, fromRow, -5),
+        });
+        return;
+      }
+      if (key.pageDown && key.shift) {
+        dispatch({
+          type: 'setSelection',
+          selection: shiftSelect(s.selection, allRows.length, fromRow, 5),
+        });
+        return;
+      }
       if (key.upArrow) {
         dispatch({ type: 'scroll', delta: 1 });
         return;
@@ -536,7 +593,8 @@ export function App({
         return;
       }
       if (key.escape) {
-        dispatch({ type: 'setTranscriptFocus', focus: false });
+        if (s.selection) dispatch({ type: 'setSelection', selection: undefined });
+        else dispatch({ type: 'setTranscriptFocus', focus: false });
         return;
       }
     }
@@ -666,9 +724,18 @@ export function App({
       // starts at row 2 (1-based) below the optional todo strip.
       const s = stateRef.current;
       const todosH = s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
-      const lineIdx = e.y - 2 - todosH;
-      const inTranscript = lineIdx >= 0 && lineIdx < layoutRef.current.height;
+      const lay = layoutRef.current;
+      const lineIdxRaw = e.y - 2 - todosH;
+      const lineIdx = Math.max(0, Math.min(lay.height - 1, lineIdxRaw));
+      const inTranscript = lineIdxRaw >= 0 && lineIdxRaw < lay.height;
+      // Terminal column (1-based x) → character index inside the row text,
+      // rounded down so a click on a double-width CJK char selects the char.
+      const colAt = (li: number, x: number): number => {
+        const r = lay.visible[li];
+        return r ? colToCharIndex(r.text, Math.max(0, x - 1)) : 0;
+      };
       if (e.type === 'wheel') {
+        dragRef.current = null;
         if (!inTranscript) return;
         const d = wheelDelta(e.button);
         if (d) {
@@ -678,12 +745,56 @@ export function App({
       } else if (e.type === 'down') {
         if (!inTranscript) return;
         dispatch({ type: 'setTranscriptFocus', focus: true });
-        const row = layoutRef.current.visible[lineIdx];
-        if (row) {
-          const b = s.blocks[row.blockIdx];
-          if (b && b.tag === 'tool' && b.output)
-            dispatch({ type: 'toggleTool', index: row.blockIdx });
+        const r = lay.visible[lineIdx];
+        if (r)
+          dragRef.current = { row: lay.start + lineIdx, col: colAt(lineIdx, e.x), moved: false };
+      } else if (e.type === 'drag') {
+        if (!dragRef.current || e.button !== 0 || !inTranscript) return;
+        dragRef.current.moved = true;
+        const r = lay.visible[lineIdx];
+        if (r)
+          dispatch({
+            type: 'setSelection',
+            selection: {
+              anchorRow: dragRef.current.row,
+              anchorCol: dragRef.current.col,
+              headRow: lay.start + lineIdx,
+              headCol: colAt(lineIdx, e.x),
+            },
+          });
+      } else if (e.type === 'up') {
+        const anchor = dragRef.current;
+        dragRef.current = null;
+        if (!anchor) return;
+        if (!anchor.moved) {
+          // Plain click (no drag): toggle tool output at the anchor row.
+          const r = lay.visible[anchor.row - lay.start];
+          if (r) {
+            const b = s.blocks[r.blockIdx];
+            if (b && b.tag === 'tool' && b.output)
+              dispatch({ type: 'toggleTool', index: r.blockIdx });
+          }
+        } else if (inTranscript) {
+          // Release inside the transcript: finalize the selection, or clear it
+          // if the drag collapsed back to a single point.
+          const r = lay.visible[lineIdx];
+          if (r) {
+            const headCol = colAt(lineIdx, e.x);
+            if (lay.start + lineIdx === anchor.row && headCol === anchor.col)
+              dispatch({ type: 'setSelection', selection: undefined });
+            else
+              dispatch({
+                type: 'setSelection',
+                selection: {
+                  anchorRow: anchor.row,
+                  anchorCol: anchor.col,
+                  headRow: lay.start + lineIdx,
+                  headCol,
+                },
+              });
+          }
         }
+        // Release outside the transcript: keep the selection as-is.
       }
     };
     return () => {
@@ -741,9 +852,19 @@ export function App({
             </Box>
           )}
           <Box flexDirection="column" height={transH}>
-            {win.visible.map((r, i) => (
-              <TranscriptRow key={win.start + i} block={state.blocks[r.blockIdx]!} text={r.text} />
-            ))}
+            {win.visible.map((r, i) => {
+              const sel = state.selection
+                ? selectionRange(state.selection, win.start + i, r.text.length)
+                : undefined;
+              return (
+                <TranscriptRow
+                  key={win.start + i}
+                  block={state.blocks[r.blockIdx]!}
+                  text={r.text}
+                  sel={sel ?? undefined}
+                />
+              );
+            })}
           </Box>
         </Box>
         {showSidebar && (

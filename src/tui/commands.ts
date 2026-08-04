@@ -55,7 +55,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   switch (cmd) {
     case 'help':
       pushSys(
-        'commands: /help /usage /context /model [id] /compact /copy [n|all] /permission <tool> <allow|ask|deny> /yolo [on|off] /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
+        'commands: /help /usage /context /model [id] /compact /copy [n|all] /permission <tool> <allow|ask|deny> /yolo [on|off] /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline · drag to select · Ctrl+Y copy',
       );
       break;
     case 'usage': {
