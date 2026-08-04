@@ -61,6 +61,44 @@ interface AppProps {
 /** Smallest main-pane width (cols) that still keeps the sidebar on screen. */
 const SIDEBAR_MIN_MAIN = 64;
 
+/**
+ * Rows consumed by the open modal, including the "Esc cancels · Enter confirms"
+ * hint line. Used to size the transcript so the frame never overflows the
+ * viewport (overflow makes Ink shrink flex children and garble the layout).
+ */
+function modalHeight(m: Modal, history: string[]): number {
+  const hint = 1;
+  switch (m.kind) {
+    case 'confirm':
+    case 'input':
+      return 2 + hint;
+    case 'select': {
+      const WINDOW = 10;
+      const start = Math.max(
+        0,
+        Math.min(m.index - Math.floor(WINDOW / 2), m.options.length - WINDOW),
+      );
+      const shown = Math.min(WINDOW, Math.max(0, m.options.length - start));
+      return (
+        1 + // title
+        (start > 0 ? 1 : 0) + // "… N more above"
+        shown +
+        (m.options.length - start - shown > 0 ? 1 : 0) + // "… N more below"
+        hint
+      );
+    }
+    case 'search': {
+      const matches = history.filter((h) => h.includes(m.query));
+      const shown = Math.min(8, matches.length);
+      return 2 + shown + (matches.length === 0 ? 1 : 0) + hint;
+    }
+    case 'palette': {
+      const shown = Math.min(10, m.items.filter((it) => it.label.includes(m.query)).length);
+      return 1 + shown + hint;
+    }
+  }
+}
+
 function wordStart(s: string, cursor: number): number {
   let i = cursor;
   while (i > 0 && s[i - 1] === ' ') i--;
@@ -109,18 +147,30 @@ export function App({
     () => slashMatches(state.input, runnerRef.current.listPluginCommands()),
     [state.input],
   );
-  const slashH = !state.modal && slashItems.length > 0 ? Math.min(slashItems.length, 8) : 0;
-  const headerH = 1;
-  const footerH = 2;
+  // With the sidebar, header and status bar live inside it (no rows of their
+  // own); the fallback full-width layout keeps one row each.
+  const headerH = showSidebar ? 0 : 1;
   // Collapsed todo strip is 1 line; expanded is one line per item.
   const todosH =
     !state.modal && state.todos.length > 0 ? (state.todosExpanded ? state.todos.length : 1) : 0;
-  // Footer = status-or-dropdown(1..slashH) + input(inputLines). Extra rows shrink
-  // the transcript so the frame still fits the viewport.
-  const transH = Math.max(
-    1,
-    termRows - headerH - footerH - todosH - (inputLines(state.input) - 1) - Math.max(0, slashH - 1),
-  );
+  const inputLinesN = inputLines(state.input);
+  // Rows taken by the bottom section (modal, slash list, or status bar) plus the
+  // input. The transcript gets exactly the remaining rows so the frame never
+  // overflows the viewport: Ink shrinks overflowing flex children, which garbles
+  // the layout (e.g. the first row of every box disappears).
+  const bottomCap = Math.max(1, termRows - headerH - todosH - inputLinesN - 1);
+  const slashH =
+    !state.modal && slashItems.length > 0 ? Math.min(slashItems.length, 8, bottomCap) : 0;
+  const bottomH = state.modal
+    ? Math.min(modalHeight(state.modal, state.history), bottomCap)
+    : slashH > 0
+      ? slashH
+      : showSidebar
+        ? 0
+        : 1; // full-width status bar
+  const transH = Math.max(1, termRows - headerH - todosH - bottomH - inputLinesN);
+  // Items actually shown: on tiny terminals the list is capped to fit.
+  const shownSlash = slashItems.slice(0, slashH);
   const allRows = useMemo(
     () => layoutBlocks(state.blocks, Math.max(1, mainW)),
     [state.blocks, mainW],
@@ -669,7 +719,7 @@ export function App({
 
   return (
     <Box flexDirection="column" height={termRows}>
-      <Text inverse> RingZero · {basename(runnerRef.current.config.cwd)}</Text>
+      {!showSidebar && <Text inverse> RingZero · {basename(runnerRef.current.config.cwd)}</Text>}
       <Box flexDirection="row" height={todosH + transH}>
         <Box flexDirection="column" width={mainW}>
           {todosH > 0 && (
@@ -691,17 +741,9 @@ export function App({
             </Box>
           )}
           <Box flexDirection="column" height={transH}>
-            {win.visible.length === 0 ? (
-              <Text dimColor>RingZero — type a message · /help for commands</Text>
-            ) : (
-              win.visible.map((r, i) => (
-                <TranscriptRow
-                  key={win.start + i}
-                  block={state.blocks[r.blockIdx]!}
-                  text={r.text}
-                />
-              ))
-            )}
+            {win.visible.map((r, i) => (
+              <TranscriptRow key={win.start + i} block={state.blocks[r.blockIdx]!} text={r.text} />
+            ))}
           </Box>
         </Box>
         {showSidebar && (
@@ -711,35 +753,39 @@ export function App({
             sessionId={runnerRef.current.sessionId}
             budget={runnerRef.current.config.contextBudget}
             height={todosH + transH}
+            cwdName={basename(runnerRef.current.config.cwd)}
+            total={allRows.length}
+            visible={win.visible.length}
           />
         )}
       </Box>
-      {modalEl ? (
-        <Box flexDirection="column">
-          {modalEl}
-          <Text dimColor> Esc cancels · Enter confirms</Text>
-        </Box>
-      ) : slashItems.length > 0 ? (
-        <SlashSuggest
-          items={slashItems}
-          index={Math.min(state.suggestIdx, slashItems.length - 1)}
+      <Box flexDirection="column" width={mainW}>
+        {modalEl ? (
+          <Box flexDirection="column">
+            {modalEl}
+            <Text dimColor> Esc cancels · Enter confirms</Text>
+          </Box>
+        ) : slashH > 0 ? (
+          <SlashSuggest
+            items={shownSlash}
+            index={Math.min(state.suggestIdx, shownSlash.length - 1)}
+          />
+        ) : !showSidebar ? (
+          <StatusBar
+            state={state}
+            total={allRows.length}
+            visible={win.visible.length}
+            budget={runner.config.contextBudget}
+            session={state.totalUsage}
+          />
+        ) : null}
+        <PromptInput
+          value={state.input}
+          cursor={state.cursor}
+          height={termRows}
+          disabled={state.running}
         />
-      ) : (
-        <StatusBar
-          state={state}
-          total={allRows.length}
-          visible={win.visible.length}
-          budget={runner.config.contextBudget}
-          session={state.totalUsage}
-          meta={!showSidebar}
-        />
-      )}
-      <PromptInput
-        value={state.input}
-        cursor={state.cursor}
-        height={termRows}
-        disabled={state.running}
-      />
+      </Box>
     </Box>
   );
 }

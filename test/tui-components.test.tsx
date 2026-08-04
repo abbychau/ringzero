@@ -69,7 +69,7 @@ test('StatusBar appends the estimated cost for the session', () => {
   assert.ok(f.includes('≈$0.415'), `frame was: ${JSON.stringify(f)}`);
 });
 
-test('Sidebar shows model, badges, ctx bar, usage, and keys', () => {
+test('Sidebar shows header, model, badges, ctx bar, usage, and status', () => {
   const state = {
     ...initial('deepseek-v4-flash', true, true),
     ctxTokens: 123456,
@@ -84,23 +84,25 @@ test('Sidebar shows model, badges, ctx bar, usage, and keys', () => {
       sessionId="abc123456789"
       budget={32000}
       height={30}
+      cwdName="myproj"
     />,
   );
   const f = stripAnsi(lastFrame()!);
+  assert.ok(f.includes('RingZero · myproj'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('deepseek-v4-flash'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('[plan]'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('[yolo]'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('[img]'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('ctx'), `frame was: ${JSON.stringify(f)}`);
-  assert.ok(f.includes('Ctrl+P'), `frame was: ${JSON.stringify(f)}`);
-  assert.ok(f.includes('/help'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('ready'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(!f.includes('Ctrl+P'), 'key hints should not be shown');
 });
 
-test('Sidebar drops keys when too short', () => {
-  const { lastFrame } = render(<Sidebar state={initial('m')} model="m" height={5} />);
+test('Sidebar pins the status row when too short', () => {
+  const { lastFrame } = render(<Sidebar state={initial('m')} model="m" height={4} cwdName="x" />);
   const f = stripAnsi(lastFrame()!);
-  assert.ok(f.includes('model'), `frame was: ${JSON.stringify(f)}`);
-  assert.ok(!f.includes('Ctrl+P'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('RingZero · x'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('ready'), `frame was: ${JSON.stringify(f)}`);
 });
 
 test('ConfirmModal shows prompt and keys', () => {

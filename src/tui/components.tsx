@@ -4,7 +4,6 @@ import { strWidth, truncateWidth } from './term.js';
 import {
   inputLineCol,
   fmtSession,
-  fmtUsage,
   type Block,
   type Option,
   type PaletteItem,
@@ -45,34 +44,29 @@ export function StatusBar({
   visible = 0,
   budget,
   session,
-  meta = true,
 }: {
   state: State;
   total?: number;
   visible?: number;
   budget?: number;
   session?: Usage;
-  /** Show ctx/usage/session meta inline (false when the sidebar shows it). */
-  meta?: boolean;
 }): React.JSX.Element {
   const sc = state.scroll > 0 ? `  · ↑${state.scroll} ${visible}/${total}` : '';
   const focus = state.transcriptFocus ? '  · ↑/↓ scroll · Esc to input' : '';
-  let metaText = '';
-  if (meta) {
-    if (state.ctxTokens !== undefined)
-      metaText += `  · ctx≈${(state.ctxTokens / 1000).toFixed(1)}k${budget ? `/${Math.round(budget / 1000)}k` : ''}`;
-    if (state.usage)
-      metaText += `  · last ${fmtUsage(state.usage)} ≈${fmtCost(estimateCost(state.model, state.usage))}`;
-    if (session)
-      metaText += `  · ${fmtSession(session)} ≈${fmtCost(estimateCost(state.model, session))}`;
-  }
+  const ctx =
+    state.ctxTokens !== undefined
+      ? `  · ctx≈${(state.ctxTokens / 1000).toFixed(1)}k${budget ? `/${Math.round(budget / 1000)}k` : ''}`
+      : '';
+  const ses = session
+    ? `  · ${fmtSession(session)} ≈${fmtCost(estimateCost(state.model, session))}`
+    : '';
   // Yolo badge is a separate colored element; status text truncates tighter to
   // leave room for it.
-  const statusText = truncateWidth(state.status + sc + focus + metaText, 92);
+  const statusText = truncateWidth(state.status + sc + focus + ctx + ses, 92);
   return (
     <Box>
       {state.running ? <Spinner /> : <Text dimColor>●</Text>}
-      {meta && state.yolo ? <Text color="red"> YOLO</Text> : null}
+      {state.yolo ? <Text color="red"> YOLO</Text> : null}
       <Text dimColor> {statusText}</Text>
     </Box>
   );
@@ -94,16 +88,17 @@ function compactUsage(u: Usage): string {
 
 interface SidebarRow {
   text?: string;
-  key?: string;
-  desc?: string;
   color?: 'yellow' | 'red' | 'cyan';
   dim?: boolean;
   bold?: boolean;
+  /** Status row: live ●/spinner prefix, kept at the bottom of the sidebar. */
+  spinner?: boolean;
 }
 
 /**
- * Right-side metadata/hints column (opencode style). Renders inside a box
- * border; taller than the content it shows, the remaining rows are blank.
+ * Right-side column (opencode style): header + metadata + status line, inside
+ * a box border. Rows it can't fit are trimmed from the tail; the status row is
+ * always pinned to the bottom.
  */
 export function Sidebar({
   state,
@@ -111,6 +106,9 @@ export function Sidebar({
   sessionId,
   budget,
   height,
+  cwdName,
+  total = 0,
+  visible = 0,
   width = SIDEBAR_W,
 }: {
   state: State;
@@ -118,11 +116,16 @@ export function Sidebar({
   sessionId?: string;
   budget?: number;
   height: number;
+  cwdName: string;
+  total?: number;
+  visible?: number;
   width?: number;
 }): React.JSX.Element | null {
   if (height < 3) return null;
   const contentW = width - 4; // '│ ' + content + ' │'
   const rows: SidebarRow[] = [
+    { text: `RingZero · ${cwdName}`, bold: true },
+    { text: '' },
     { text: 'model', dim: true },
     { text: model, color: 'cyan', bold: true },
     ...(sessionId ? [{ text: `session ${sessionId.slice(0, 8)}`, dim: true }] : []),
@@ -156,44 +159,33 @@ export function Sidebar({
       });
     }
   }
-  rows.push({ text: '' }, { text: 'keys', dim: true });
-  const keys: Array<[string, string]> = [
-    ['Ctrl+P', 'model'],
-    ['Ctrl+K', 'palette'],
-    ['Ctrl+R', 'search'],
-    ['Ctrl+O', 'expand tool'],
-    ['Ctrl+T', 'todos'],
-    ['Ctrl+J', 'newline'],
-    ['↑/↓', 'history'],
-    ['PgUp/Dn', 'scroll'],
-    ['wheel', 'scroll'],
-    ['Esc', 'to input'],
-    ['/help', 'commands'],
-  ];
-  for (const [k, d] of keys) rows.push({ key: k, desc: d });
+  // The status line lives here instead of a full-width bottom bar.
+  const sc = state.scroll > 0 ? `  · ↑${state.scroll} ${visible}/${total}` : '';
+  const focus = state.transcriptFocus ? '  · ↑/↓ scroll · Esc to input' : '';
+  const status: SidebarRow = { text: state.status + sc + focus, spinner: true };
 
   const avail = Math.max(1, height - 2);
-  const visible = rows.slice(0, avail);
-  const pad = Math.max(0, avail - visible.length);
+  const visibleRows = [...rows.slice(0, Math.max(0, avail - 1)), status].slice(0, avail);
+  const pad = Math.max(0, avail - visibleRows.length);
   return (
     <Box flexDirection="column" width={width}>
       <Text dimColor>{'┌' + '─'.repeat(width - 2) + '┐'}</Text>
-      {visible.map((r, i) => {
-        let inner: string;
-        if (r.key !== undefined) {
-          const gap = Math.max(1, 7 - strWidth(r.key));
-          inner = r.key + ' '.repeat(gap) + (r.desc ?? '');
-        } else {
-          inner = r.text ?? '';
-        }
-        inner = truncateWidth(inner, contentW);
-        const line = '│ ' + padWidth(inner, contentW) + ' │';
-        return (
-          <Text key={i} color={r.color} dimColor={r.dim} bold={r.bold}>
-            {line}
+      {visibleRows.map((r, i) =>
+        r.spinner ? (
+          <Text key={i} dimColor>
+            {'│ '}
+            {state.running ? <Spinner /> : <Text dimColor>●</Text>}{' '}
+            {padWidth(truncateWidth(r.text ?? '', contentW - 2), contentW - 2)}
+            {' │'}
           </Text>
-        );
-      })}
+        ) : (
+          <Text key={i} color={r.color} dimColor={r.dim} bold={r.bold}>
+            {'│ '}
+            {padWidth(truncateWidth(r.text ?? '', contentW), contentW)}
+            {' │'}
+          </Text>
+        ),
+      )}
       {Array.from({ length: pad }, (_, i) => (
         <Text key={`p${i}`} dimColor>
           {'│' + ' '.repeat(width - 2) + '│'}

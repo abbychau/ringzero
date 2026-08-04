@@ -7,11 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- TUI right sidebar (opencode-style): model, session id, mode badges
-  (`[plan]`/`[yolo]`/`[img]`), live context-budget bar, per-turn + session
-  token/cost totals, and key hints; shown at ≥ 90 columns, otherwise that
-  metadata stays in the status bar. Header now shows the working-dir name
-  (`src/tui/components.tsx`, `src/tui/app.tsx`).
+- TUI right sidebar (opencode-style): header (`RingZero · <dir>`), model,
+  session id, mode badges (`[plan]`/`[yolo]`/`[img]`), live context-budget
+  bar, per-turn + session token/cost totals, and the status line; shown at
+  ≥ 90 columns, otherwise header/status stay full-width. Empty transcript
+  no longer shows a placeholder (`src/tui/components.tsx`, `src/tui/app.tsx`).
 - Yolo mode: `/yolo` (TUI/REPL), `YOLO=1` env (alias `RINGZERO_YOLO`), or
   `--yolo` flag — every permission check auto-allows, no prompts, overrides
   `deny` rules and plan mode; step-cap continuation auto-runs (capped at 3
