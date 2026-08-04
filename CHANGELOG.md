@@ -74,6 +74,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- `MAX_STEPS` env: short name for `RINGZERO_MAX_STEPS` (handy in `.env`),
+  with `-1` = unlimited agent-loop steps
+  (`src/config/config.ts`, `src/kernel/agent.ts`, `src/cli/doctor.ts`).
 - Workspace sandbox auto-detect: with `RINGZERO_WORKSPACE` unset, fs tools are
   locked to the git work-tree root (`detectGitRoot`, `src/config/config.ts`);
   `off`/`none` disables the sandbox.

@@ -80,7 +80,9 @@ export function doctorReport(config: AppConfig): DoctorFinding[] {
     level: 'ok',
     label: 'Config',
     detail:
-      `context budget ${config.contextBudget.toLocaleString()} · max steps ${config.maxSteps}` +
+      `context budget ${config.contextBudget.toLocaleString()} · max steps ${
+        config.maxSteps < 0 ? 'unlimited' : config.maxSteps
+      }` +
       ` · verify ${config.verifyCommand ? 'on' : 'off'}` +
       ` · favorite models: ${config.favoriteModels.join(', ') || '(none)'}`,
   });

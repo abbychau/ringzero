@@ -44,12 +44,44 @@ test('loadConfig with RINGZERO_WORKSPACE=off disables the sandbox', () => {
 
 test('loadConfig auto-detects the git root as workspace when unset', () => {
   const prev = process.env.RINGZERO_WORKSPACE;
-  delete process.env.RINGZERO_WORKSPACE;
+  // '' means unset here but still blocks .env from re-setting it (loadEnv
+  // never overrides keys already present in process.env).
+  process.env.RINGZERO_WORKSPACE = '';
   try {
     const ws = loadConfig().workspace;
     assert.ok(ws, 'expected workspace to be auto-detected');
     assert.equal(resolve(ws), resolve(process.cwd()));
   } finally {
-    if (prev !== undefined) process.env.RINGZERO_WORKSPACE = prev;
+    if (prev === undefined) delete process.env.RINGZERO_WORKSPACE;
+    else process.env.RINGZERO_WORKSPACE = prev;
   }
+});
+
+/** Run fn with an env var set (or removed when value is undefined), restoring after. */
+async function withEnv(key: string, value: string | undefined, fn: () => void | Promise<void>) {
+  const prev = process.env[key];
+  if (value === undefined) delete process.env[key];
+  else process.env[key] = value;
+  try {
+    await fn();
+  } finally {
+    if (prev === undefined) delete process.env[key];
+    else process.env[key] = prev;
+  }
+}
+
+test('MAX_STEPS (short name) wins over RINGZERO_MAX_STEPS', () => {
+  return withEnv('MAX_STEPS', '48', () =>
+    withEnv('RINGZERO_MAX_STEPS', '10', () => {
+      assert.equal(loadConfig().maxSteps, 48);
+    }),
+  );
+});
+
+test('MAX_STEPS=-1 means unlimited steps', () => {
+  return withEnv('MAX_STEPS', '-1', () =>
+    withEnv('RINGZERO_MAX_STEPS', '10', () => {
+      assert.equal(loadConfig().maxSteps, -1);
+    }),
+  );
 });

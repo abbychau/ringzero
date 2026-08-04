@@ -86,6 +86,8 @@ export function loadConfig(): AppConfig {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  // MAX_STEPS (short, handy in .env) wins over RINGZERO_MAX_STEPS; -1 = unlimited.
+  const maxStepsEnv = process.env.MAX_STEPS ?? process.env.RINGZERO_MAX_STEPS;
 
   const systemPrompt: string[] = [
     DEFAULT_SYSTEM,
@@ -112,7 +114,7 @@ export function loadConfig(): AppConfig {
     // CONTEXT_BUDGET (short, for .env) takes precedence, falls back to RINGZERO_CONTEXT_BUDGET.
     contextBudget: num(process.env.CONTEXT_BUDGET ?? process.env.RINGZERO_CONTEXT_BUDGET, 32_000),
     preserveRecentTokens: num(process.env.RINGZERO_PRESERVE_RECENT, 8_000),
-    maxSteps: num(process.env.RINGZERO_MAX_STEPS, 24),
+    maxSteps: maxStepsEnv === '-1' ? -1 : num(maxStepsEnv, 24),
     systemPrompt,
     favoriteModels: favoriteModels.length ? favoriteModels : [env.model],
     verifyCommand: process.env.RINGZERO_VERIFY || undefined,

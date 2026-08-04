@@ -253,8 +253,10 @@ export class Agent {
       };
     };
     let steps = 0;
+    // maxSteps < 0 (MAX_STEPS=-1) disables the step cap entirely.
+    const stepCap = this.opts.maxSteps < 0 ? Number.POSITIVE_INFINITY : this.opts.maxSteps;
 
-    while (steps < this.opts.maxSteps) {
+    while (steps < stepCap) {
       // Mid-run injection: process queued user messages before the next model call.
       if (this.interrupts.length > 0) {
         for (const t of this.interrupts.splice(0)) {

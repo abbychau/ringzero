@@ -183,6 +183,19 @@ test('runaway tool loop stops at maxSteps', async () => {
   assert.equal(events.filter((e) => e.type === 'tool_result').length, 3);
 });
 
+test('maxSteps -1 removes the step cap', async () => {
+  let calls = 0;
+  const provider = scriptedProvider(() => {
+    if (calls++ < 5) return { calls: [{ name: 'add', args: { a: 1, b: 2 } }] };
+    return { text: 'done' };
+  });
+  const agent = new Agent({ provider, tools: [add], permission: allowAll, maxSteps: -1 });
+  const { events, finalText } = await run(agent, 'loop');
+  const finish = events[events.length - 1] as Extract<AgentEvent, { type: 'finish' }>;
+  assert.equal(finish.steps, 5);
+  assert.equal(finalText, 'done');
+});
+
 test('mid-run injection aborts the stream, queues the message, and continues', async () => {
   // First call: stream one text chunk, then stall until the agent aborts us
   // (real providers behave this way when their fetch is aborted).
