@@ -69,7 +69,8 @@ disclosure (skills), and ephemeral sub-agents.
   Persists to `config.json` like `/permission` overrides.
 - **Token/cost dashboard** — per-turn + session input/output/cache breakdown
   with cache hit rate and an estimated cost from a built-in zero-dep price
-  table (StatusBar, `/usage`, per-turn status); tune `src/kernel/cost.ts`.
+  table (right sidebar + StatusBar, `/usage`, per-turn status); tune
+  `src/kernel/cost.ts`.
 - **Symbol index + `related_files`** — zero-dep ctags-style index
   (`src/tools/indexer.ts`, cached with mtime invalidation); `related_files`
   finds importers and files defining the same symbols before you edit.
@@ -143,6 +144,12 @@ ringzero --doctor               # environment self-check (exit 1 on problems)
 
 ### TUI keys
 
+The layout is opencode-style: conversation on the left, a **right sidebar**
+(terminals ≥ 90 columns) with the model, session id, mode badges (`[plan]`,
+`[yolo]`, `[img]`), a live context-budget bar, token/cost totals, and key
+hints. On narrower terminals the sidebar hides and that metadata moves into
+the status bar. The header shows `RingZero · <working-dir name>`.
+
 `Enter` submit · `↑/↓` input history · `PgUp/PgDn` or **mouse wheel** scroll ·
 `Ctrl+P/L` model dialog / cycle favorites (`RINGZERO_MODELS`) · `Ctrl+K` command palette ·
 `Ctrl+O` or **mouse click** expand/collapse tool output · `Ctrl+T` toggle the todo list ·
@@ -158,7 +165,7 @@ Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 `/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /yolo [on|off]  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
 
 `/image <path>` attaches an image to your next message (shown as `[img]` in the
-header); `/image clear` removes it. `/export [path]` writes the current session
+sidebar); `/image clear` removes it. `/export [path]` writes the current session
 as a Markdown transcript (default: `transcript-<id>.md` in the cwd).
 
 `/tools` opens a toggle menu (TUI) — Enter flips a tool on/off, Esc closes — or

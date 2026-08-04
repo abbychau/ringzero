@@ -1,8 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { basename } from 'node:path';
 import { render } from 'ink-testing-library';
 import {
   StatusBar,
+  Sidebar,
   ConfirmModal,
   SelectModal,
   InputModal,
@@ -12,6 +14,7 @@ import { initial } from '../src/tui/state.js';
 import { App } from '../src/tui/app.js';
 import { Runner } from '../src/cli/runner.js';
 import { loadConfig } from '../src/config/config.js';
+import type { ImageInput } from '../src/kernel/types.js';
 
 const stripAnsi = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '');
 
@@ -32,7 +35,9 @@ test('App mounts and renders the header', () => {
   );
   const f = lastFrame()!;
   assert.ok(f.includes('RingZero'), `frame was: ${JSON.stringify(f)}`);
-  assert.ok(f.includes('test-model'), `frame was: ${JSON.stringify(f)}`);
+  // Header shows the working dir name; model lives in the sidebar (hidden at
+  // the 80-col test viewport, which is under the 90-col sidebar threshold).
+  assert.ok(f.includes(basename(config.cwd)), `frame was: ${JSON.stringify(f)}`);
 });
 
 test('StatusBar renders idle status', () => {
@@ -62,6 +67,40 @@ test('StatusBar appends the estimated cost for the session', () => {
   );
   const f = stripAnsi(lastFrame()!);
   assert.ok(f.includes('≈$0.415'), `frame was: ${JSON.stringify(f)}`);
+});
+
+test('Sidebar shows model, badges, ctx bar, usage, and keys', () => {
+  const state = {
+    ...initial('deepseek-v4-flash', true, true),
+    ctxTokens: 123456,
+    usage: { input: 1000, output: 500, cacheRead: 300 },
+    totalUsage: { input: 5000, output: 2000, cacheRead: 3000 },
+    pendingImage: { mime: 'image/png', data: 'x' } as ImageInput,
+  };
+  const { lastFrame } = render(
+    <Sidebar
+      state={state}
+      model="deepseek-v4-flash"
+      sessionId="abc123456789"
+      budget={32000}
+      height={30}
+    />,
+  );
+  const f = stripAnsi(lastFrame()!);
+  assert.ok(f.includes('deepseek-v4-flash'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('[plan]'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('[yolo]'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('[img]'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('ctx'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('Ctrl+P'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(f.includes('/help'), `frame was: ${JSON.stringify(f)}`);
+});
+
+test('Sidebar drops keys when too short', () => {
+  const { lastFrame } = render(<Sidebar state={initial('m')} model="m" height={5} />);
+  const f = stripAnsi(lastFrame()!);
+  assert.ok(f.includes('model'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(!f.includes('Ctrl+P'), `frame was: ${JSON.stringify(f)}`);
 });
 
 test('ConfirmModal shows prompt and keys', () => {

@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import { render, Box, Text, useInput, usePaste, useApp, useWindowSize } from 'ink';
 import { appendFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import process from 'node:process';
 import type { AppConfig } from '../config/config.js';
 import { Runner } from '../cli/runner.js';
@@ -11,7 +12,6 @@ import {
   initial,
   layoutBlocks,
   windowRows,
-  fmtUsage,
   inputLines,
   slashMatches,
   type Modal,
@@ -23,10 +23,11 @@ import {
 } from './state.js';
 import { handleSlashCommand, type CommandDeps } from './commands.js';
 import { notifyPermission, notifyRunComplete } from '../cli/notify.js';
-import { estimateCost, fmtCost } from '../kernel/cost.js';
 import {
   TranscriptRow,
   StatusBar,
+  Sidebar,
+  SIDEBAR_W,
   PromptInput,
   ConfirmModal,
   InputModal,
@@ -35,6 +36,7 @@ import {
   SearchModal,
   SlashSuggest,
 } from './components.js';
+import { truncateWidth } from './term.js';
 import {
   MouseParser,
   FilteredStdin,
@@ -55,6 +57,9 @@ interface AppProps {
   mouseCbRef: { current?: (e: MouseEventData) => void };
   onExit: () => void;
 }
+
+/** Smallest main-pane width (cols) that still keeps the sidebar on screen. */
+const SIDEBAR_MIN_MAIN = 64;
 
 function wordStart(s: string, cursor: number): number {
   let i = cursor;
@@ -78,6 +83,10 @@ export function App({
     initial(initialModel, runner.isPlanMode(), runner.yolo),
   );
   const { rows: termRows, columns } = useWindowSize();
+  // Narrow terminals (< SIDEBAR_W + SIDEBAR_MIN_MAIN cols) fall back to the
+  // full-width layout so 80-col terminals stay usable.
+  const showSidebar = columns >= SIDEBAR_W + SIDEBAR_MIN_MAIN;
+  const mainW = showSidebar ? columns - SIDEBAR_W : columns;
   const { exit } = useApp();
   const quit = (): void => {
     onExit();
@@ -89,10 +98,11 @@ export function App({
   const runnerRef = useRef(runner);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const layoutRef = useRef<{ start: number; visible: Row[]; height: number }>({
+  const layoutRef = useRef<{ start: number; visible: Row[]; height: number; mainW: number }>({
     start: 0,
     visible: [],
     height: 0,
+    mainW: 0,
   });
 
   const slashItems = useMemo(
@@ -112,14 +122,14 @@ export function App({
     termRows - headerH - footerH - todosH - (inputLines(state.input) - 1) - Math.max(0, slashH - 1),
   );
   const allRows = useMemo(
-    () => layoutBlocks(state.blocks, Math.max(1, columns)),
-    [state.blocks, columns],
+    () => layoutBlocks(state.blocks, Math.max(1, mainW)),
+    [state.blocks, mainW],
   );
   const win = useMemo(
     () => windowRows(allRows, transH, state.scroll),
     [allRows, transH, state.scroll],
   );
-  layoutRef.current = { start: win.start, visible: win.visible, height: transH };
+  layoutRef.current = { start: win.start, visible: win.visible, height: transH, mainW };
 
   const pushSys = useCallback(
     (text: string) => dispatch({ type: 'push', block: { tag: 'sys', text } }),
@@ -198,10 +208,8 @@ export function App({
       } catch {
         /* ignore */
       }
-      const finalStatus =
-        status === 'idle' && usage
-          ? `idle · ${fmtUsage(usage)} ≈${fmtCost(estimateCost(runnerRef.current.model, usage))}`
-          : status;
+      // Usage/ctx are shown by the StatusBar/sidebar, so idle needs no suffix.
+      const finalStatus = status === 'idle' ? 'idle' : status;
       dispatch({ type: 'runEnd', usage, status: finalStatus, ctx });
       notifyRunComplete(Math.round((performance.now() - t0) / 1000));
       // Step cap hit and the run wasn't aborted: yolo auto-continues (bounded);
@@ -602,6 +610,8 @@ export function App({
   // mouse events are parsed in runTui (filtered out of Ink's stdin); dispatch here.
   useEffect(() => {
     mouseCbRef.current = (e: MouseEventData) => {
+      // Clicks/wheel over the sidebar (right of the main pane) do nothing.
+      if (e.x > layoutRef.current.mainW) return;
       // Mouse y is 1-based terminal row; header is row 1, so the transcript
       // starts at row 2 (1-based) below the optional todo strip.
       const s = stateRef.current;
@@ -659,38 +669,49 @@ export function App({
 
   return (
     <Box flexDirection="column" height={termRows}>
-      <Text inverse>
-        {' '}
-        RingZero · {state.model}
-        {state.planMode ? ' · [plan]' : ''}
-        {state.pendingImage ? ' · [img]' : ''}
-        {runnerRef.current.sessionId ? ` · ${runnerRef.current.sessionId}` : ''}
-      </Text>
-      {todosH > 0 && (
-        <Box flexDirection="column" height={todosH}>
-          {state.todosExpanded ? (
-            state.todos.map((t, i) => (
-              <Text key={i} dimColor={t.done}>
-                {' '}
-                {i + 1}. {t.done ? '[x]' : '[ ]'} {t.text}
-              </Text>
-            ))
-          ) : (
-            <Text dimColor>
-              {' '}
-              📋 {state.todos.filter((t) => t.done).length}/{state.todos.length} done — Ctrl+T to
-              expand
-            </Text>
+      <Text inverse> RingZero · {basename(runnerRef.current.config.cwd)}</Text>
+      <Box flexDirection="row" height={todosH + transH}>
+        <Box flexDirection="column" width={mainW}>
+          {todosH > 0 && (
+            <Box flexDirection="column" height={todosH}>
+              {state.todosExpanded ? (
+                state.todos.map((t, i) => (
+                  <Text key={i} dimColor={t.done}>
+                    {' '}
+                    {i + 1}. {t.done ? '[x]' : '[ ]'} {truncateWidth(t.text, mainW)}
+                  </Text>
+                ))
+              ) : (
+                <Text dimColor>
+                  {' '}
+                  📋 {state.todos.filter((t) => t.done).length}/{state.todos.length} done — Ctrl+T
+                  to expand
+                </Text>
+              )}
+            </Box>
           )}
+          <Box flexDirection="column" height={transH}>
+            {win.visible.length === 0 ? (
+              <Text dimColor>RingZero — type a message · /help for commands</Text>
+            ) : (
+              win.visible.map((r, i) => (
+                <TranscriptRow
+                  key={win.start + i}
+                  block={state.blocks[r.blockIdx]!}
+                  text={r.text}
+                />
+              ))
+            )}
+          </Box>
         </Box>
-      )}
-      <Box flexDirection="column" height={transH}>
-        {win.visible.length === 0 ? (
-          <Text dimColor>RingZero — type a message · /help for commands</Text>
-        ) : (
-          win.visible.map((r, i) => (
-            <TranscriptRow key={win.start + i} block={state.blocks[r.blockIdx]!} text={r.text} />
-          ))
+        {showSidebar && (
+          <Sidebar
+            state={state}
+            model={state.model}
+            sessionId={runnerRef.current.sessionId}
+            budget={runnerRef.current.config.contextBudget}
+            height={todosH + transH}
+          />
         )}
       </Box>
       {modalEl ? (
@@ -710,6 +731,7 @@ export function App({
           visible={win.visible.length}
           budget={runner.config.contextBudget}
           session={state.totalUsage}
+          meta={!showSidebar}
         />
       )}
       <PromptInput

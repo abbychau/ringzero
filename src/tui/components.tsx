@@ -4,13 +4,17 @@ import { strWidth, truncateWidth } from './term.js';
 import {
   inputLineCol,
   fmtSession,
+  fmtUsage,
   type Block,
   type Option,
   type PaletteItem,
   type State,
   type Usage,
 } from './state.js';
-import { estimateCost, fmtCost } from '../kernel/cost.js';
+import { estimateCost, fmtCost, cacheHitRate } from '../kernel/cost.js';
+
+/** Fixed width of the metadata/hints sidebar (opencode-style right column). */
+export const SIDEBAR_W = 26;
 
 const TAG_STYLE: Record<Block['tag'], { color?: string; bold?: boolean; dim?: boolean }> = {
   user: { color: 'cyan' },
@@ -41,30 +45,161 @@ export function StatusBar({
   visible = 0,
   budget,
   session,
+  meta = true,
 }: {
   state: State;
   total?: number;
   visible?: number;
   budget?: number;
   session?: Usage;
+  /** Show ctx/usage/session meta inline (false when the sidebar shows it). */
+  meta?: boolean;
 }): React.JSX.Element {
   const sc = state.scroll > 0 ? `  · ↑${state.scroll} ${visible}/${total}` : '';
   const focus = state.transcriptFocus ? '  · ↑/↓ scroll · Esc to input' : '';
-  const ctx =
-    state.ctxTokens !== undefined
-      ? `  · ctx≈${(state.ctxTokens / 1000).toFixed(1)}k${budget ? `/${Math.round(budget / 1000)}k` : ''}`
-      : '';
-  const ses = session
-    ? `  · ${fmtSession(session)} ≈${fmtCost(estimateCost(state.model, session))}`
-    : '';
+  let metaText = '';
+  if (meta) {
+    if (state.ctxTokens !== undefined)
+      metaText += `  · ctx≈${(state.ctxTokens / 1000).toFixed(1)}k${budget ? `/${Math.round(budget / 1000)}k` : ''}`;
+    if (state.usage)
+      metaText += `  · last ${fmtUsage(state.usage)} ≈${fmtCost(estimateCost(state.model, state.usage))}`;
+    if (session)
+      metaText += `  · ${fmtSession(session)} ≈${fmtCost(estimateCost(state.model, session))}`;
+  }
   // Yolo badge is a separate colored element; status text truncates tighter to
   // leave room for it.
-  const statusText = truncateWidth(state.status + sc + focus + ctx + ses, 92);
+  const statusText = truncateWidth(state.status + sc + focus + metaText, 92);
   return (
     <Box>
       {state.running ? <Spinner /> : <Text dimColor>●</Text>}
-      {state.yolo ? <Text color="red"> YOLO</Text> : null}
+      {meta && state.yolo ? <Text color="red"> YOLO</Text> : null}
       <Text dimColor> {statusText}</Text>
+    </Box>
+  );
+}
+
+function padWidth(s: string, w: number): string {
+  const cur = strWidth(s);
+  return s + ' '.repeat(Math.max(0, w - cur));
+}
+
+function fmtBudget(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  return `${Math.round(n / 1000)}k`;
+}
+
+function compactUsage(u: Usage): string {
+  return `in ${u.input} · out ${u.output}${u.cacheRead ? ` · c ${u.cacheRead}` : ''}`;
+}
+
+interface SidebarRow {
+  text?: string;
+  key?: string;
+  desc?: string;
+  color?: 'yellow' | 'red' | 'cyan';
+  dim?: boolean;
+  bold?: boolean;
+}
+
+/**
+ * Right-side metadata/hints column (opencode style). Renders inside a box
+ * border; taller than the content it shows, the remaining rows are blank.
+ */
+export function Sidebar({
+  state,
+  model,
+  sessionId,
+  budget,
+  height,
+  width = SIDEBAR_W,
+}: {
+  state: State;
+  model: string;
+  sessionId?: string;
+  budget?: number;
+  height: number;
+  width?: number;
+}): React.JSX.Element | null {
+  if (height < 3) return null;
+  const contentW = width - 4; // '│ ' + content + ' │'
+  const rows: SidebarRow[] = [
+    { text: 'model', dim: true },
+    { text: model, color: 'cyan', bold: true },
+    ...(sessionId ? [{ text: `session ${sessionId.slice(0, 8)}`, dim: true }] : []),
+  ];
+  if (state.planMode || state.yolo || state.pendingImage) {
+    rows.push({ text: '' });
+    if (state.planMode) rows.push({ text: '[plan] mode', color: 'yellow' });
+    if (state.yolo) rows.push({ text: '[yolo] auto-allow', color: 'red' });
+    if (state.pendingImage) rows.push({ text: '[img] attached', color: 'cyan' });
+  }
+  if (state.ctxTokens !== undefined) {
+    rows.push({ text: '' });
+    const pct = Math.min(1, Math.max(0, state.ctxTokens / Math.max(1, budget ?? 0)));
+    const fill = Math.round(pct * contentW);
+    rows.push({
+      text: `ctx ${(state.ctxTokens / 1000).toFixed(1)}k / ${budget !== undefined ? fmtBudget(budget) : '?'}`,
+      dim: true,
+    });
+    rows.push({ text: '█'.repeat(fill) + '░'.repeat(Math.max(0, contentW - fill)), dim: true });
+  }
+  const usage = state.usage;
+  const totalUsage = state.totalUsage;
+  if (usage || totalUsage) {
+    rows.push({ text: '' });
+    if (usage) rows.push({ text: `last ${compactUsage(usage)}`, dim: true });
+    if (totalUsage) {
+      rows.push({ text: `sess ${compactUsage(totalUsage)}`, dim: true });
+      rows.push({
+        text: `${Math.round(cacheHitRate(totalUsage) * 100)}% cached · ≈${fmtCost(estimateCost(model, totalUsage))}`,
+        dim: true,
+      });
+    }
+  }
+  rows.push({ text: '' }, { text: 'keys', dim: true });
+  const keys: Array<[string, string]> = [
+    ['Ctrl+P', 'model'],
+    ['Ctrl+K', 'palette'],
+    ['Ctrl+R', 'search'],
+    ['Ctrl+O', 'expand tool'],
+    ['Ctrl+T', 'todos'],
+    ['Ctrl+J', 'newline'],
+    ['↑/↓', 'history'],
+    ['PgUp/Dn', 'scroll'],
+    ['wheel', 'scroll'],
+    ['Esc', 'to input'],
+    ['/help', 'commands'],
+  ];
+  for (const [k, d] of keys) rows.push({ key: k, desc: d });
+
+  const avail = Math.max(1, height - 2);
+  const visible = rows.slice(0, avail);
+  const pad = Math.max(0, avail - visible.length);
+  return (
+    <Box flexDirection="column" width={width}>
+      <Text dimColor>{'┌' + '─'.repeat(width - 2) + '┐'}</Text>
+      {visible.map((r, i) => {
+        let inner: string;
+        if (r.key !== undefined) {
+          const gap = Math.max(1, 7 - strWidth(r.key));
+          inner = r.key + ' '.repeat(gap) + (r.desc ?? '');
+        } else {
+          inner = r.text ?? '';
+        }
+        inner = truncateWidth(inner, contentW);
+        const line = '│ ' + padWidth(inner, contentW) + ' │';
+        return (
+          <Text key={i} color={r.color} dimColor={r.dim} bold={r.bold}>
+            {line}
+          </Text>
+        );
+      })}
+      {Array.from({ length: pad }, (_, i) => (
+        <Text key={`p${i}`} dimColor>
+          {'│' + ' '.repeat(width - 2) + '│'}
+        </Text>
+      ))}
+      <Text dimColor>{'└' + '─'.repeat(width - 2) + '┘'}</Text>
     </Box>
   );
 }
