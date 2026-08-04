@@ -30,6 +30,7 @@ import {
   TranscriptRow,
   StatusBar,
   Sidebar,
+  sidebarTextLines,
   SIDEBAR_W,
   PromptInput,
   ConfirmModal,
@@ -146,15 +147,23 @@ export function App({
     height: number;
     mainW: number;
     headerH: number;
+    /** Selectable text lines of the sidebar (empty when hidden). */
+    sidebarRows: Row[];
   }>({
     start: 0,
     visible: [],
     height: 0,
     mainW: 0,
     headerH: 1,
+    sidebarRows: [],
   });
-  /** Mouse-down position while dragging: { row, col, moved } in layout rows. */
-  const dragRef = useRef<{ row: number; col: number; moved: boolean } | null>(null);
+  /** Mouse-down position while dragging: { pane, row, col, moved }. */
+  const dragRef = useRef<{
+    pane: 'transcript' | 'sidebar';
+    row: number;
+    col: number;
+    moved: boolean;
+  } | null>(null);
 
   const slashItems = useMemo(
     () => slashMatches(state.input, runnerRef.current.listPluginCommands()),
@@ -192,7 +201,27 @@ export function App({
     () => windowRows(allRows, transH, state.scroll),
     [allRows, transH, state.scroll],
   );
-  layoutRef.current = { start: win.start, visible: win.visible, height: transH, mainW, headerH };
+  const sidebarRows = showSidebar
+    ? sidebarTextLines(
+        state,
+        state.model,
+        runnerRef.current.sessionId,
+        runner.config.contextBudget,
+        basename(runnerRef.current.config.cwd),
+        allRows.length,
+        win.visible.length,
+        SIDEBAR_W,
+        todosH + transH,
+      ).map((text) => ({ blockIdx: 0, text }))
+    : [];
+  layoutRef.current = {
+    start: win.start,
+    visible: win.visible,
+    height: transH,
+    mainW,
+    headerH,
+    sidebarRows,
+  };
 
   const pushSys = useCallback(
     (text: string) => dispatch({ type: 'push', block: { tag: 'sys', text } }),
@@ -532,7 +561,8 @@ export function App({
     if (key.ctrl && input === 'y') {
       const sel = s.selection;
       if (sel) {
-        const text = selectionText(allRows, sel);
+        const rows = sel.pane === 'sidebar' ? layoutRef.current.sidebarRows : allRows;
+        const text = selectionText(rows, sel);
         if (text) {
           pushSys('copying selection…');
           void copyToClipboard(text).then((ok) => {
@@ -725,65 +755,125 @@ export function App({
   // mouse events are parsed in runTui (filtered out of Ink's stdin); dispatch here.
   useEffect(() => {
     mouseCbRef.current = (e: MouseEventData) => {
-      // Clicks/wheel over the sidebar (right of the main pane) do nothing.
-      if (e.x > layoutRef.current.mainW) return;
       // Mouse y is 1-based terminal row. The first content row (todos or
       // transcript) sits at terminal row 1+headerH: with the sidebar the header
       // lives inside it (headerH 0), otherwise it takes row 1 (headerH 1).
       const s = stateRef.current;
       const todosH = !s.modal && s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
       const lay = layoutRef.current;
+      const inSidebar = e.x > lay.mainW;
+      // Transcript row index (0-based into lay.visible).
       const lineIdxRaw = e.y - 1 - lay.headerH - todosH;
       const lineIdx = Math.max(0, Math.min(lay.height - 1, lineIdxRaw));
       const inTranscript = lineIdxRaw >= 0 && lineIdxRaw < lay.height;
+      // Sidebar content row index (0-based into lay.sidebarRows); the box's top
+      // border adds one more row above the transcript's first line.
+      const sidebarIdxRaw = e.y - 2 - lay.headerH - todosH;
+      const sidebarIdx = Math.max(0, Math.min(lay.sidebarRows.length - 1, sidebarIdxRaw));
+      const inSidebarContent = sidebarIdxRaw >= 0 && sidebarIdxRaw < lay.sidebarRows.length;
       // Terminal column (1-based x) → character index inside the row text,
       // rounded down so a click on a double-width CJK char selects the char.
       const colAt = (li: number, x: number): number => {
         const r = lay.visible[li];
         return r ? colToCharIndex(r.text, Math.max(0, x - 1)) : 0;
       };
+      // Sidebar text starts after the '│ ' border ('│' at mainW+1, text at mainW+3).
+      const colAtSidebar = (li: number, x: number): number =>
+        colToCharIndex(lay.sidebarRows[li]?.text ?? '', Math.max(0, x - lay.mainW - 3));
       if (e.type === 'wheel') {
         dragRef.current = null;
-        if (!inTranscript) return;
+        if (inSidebar || !inTranscript) return;
         const d = wheelDelta(e.button);
         if (d) {
           dispatch({ type: 'scroll', delta: d });
           dispatch({ type: 'setTranscriptFocus', focus: true });
         }
       } else if (e.type === 'down') {
-        if (!inTranscript) return;
-        dispatch({ type: 'setTranscriptFocus', focus: true });
-        const r = lay.visible[lineIdx];
-        if (r)
-          dragRef.current = { row: lay.start + lineIdx, col: colAt(lineIdx, e.x), moved: false };
+        if (inSidebar) {
+          if (!inSidebarContent) return;
+          dispatch({ type: 'setTranscriptFocus', focus: true });
+          dragRef.current = {
+            pane: 'sidebar',
+            row: sidebarIdx,
+            col: colAtSidebar(sidebarIdx, e.x),
+            moved: false,
+          };
+        } else {
+          if (!inTranscript) return;
+          dispatch({ type: 'setTranscriptFocus', focus: true });
+          const r = lay.visible[lineIdx];
+          if (r)
+            dragRef.current = {
+              pane: 'transcript',
+              row: lay.start + lineIdx,
+              col: colAt(lineIdx, e.x),
+              moved: false,
+            };
+        }
       } else if (e.type === 'drag') {
-        if (!dragRef.current || e.button !== 0 || !inTranscript) return;
+        if (!dragRef.current || e.button !== 0) return;
         dragRef.current.moved = true;
-        const r = lay.visible[lineIdx];
-        if (r)
+        if (dragRef.current.pane === 'sidebar') {
+          if (!inSidebarContent) return;
           dispatch({
             type: 'setSelection',
             selection: {
+              pane: 'sidebar',
               anchorRow: dragRef.current.row,
               anchorCol: dragRef.current.col,
-              headRow: lay.start + lineIdx,
-              headCol: colAt(lineIdx, e.x),
+              headRow: sidebarIdx,
+              headCol: colAtSidebar(sidebarIdx, e.x),
             },
           });
+        } else {
+          if (!inTranscript) return;
+          const r = lay.visible[lineIdx];
+          if (r)
+            dispatch({
+              type: 'setSelection',
+              selection: {
+                pane: 'transcript',
+                anchorRow: dragRef.current.row,
+                anchorCol: dragRef.current.col,
+                headRow: lay.start + lineIdx,
+                headCol: colAt(lineIdx, e.x),
+              },
+            });
+        }
       } else if (e.type === 'up') {
         const anchor = dragRef.current;
         dragRef.current = null;
         if (!anchor) return;
         if (!anchor.moved) {
-          // Plain click (no drag): drop any active selection and toggle tool
-          // output at the anchor row.
+          // Plain click (no drag): drop any active selection; toggle tool
+          // output when the click landed on a transcript tool row.
           dispatch({ type: 'setSelection', selection: undefined });
-          const r = lay.visible[anchor.row - lay.start];
-          if (r) {
-            const b = s.blocks[r.blockIdx];
-            if (b && b.tag === 'tool' && b.output)
-              dispatch({ type: 'toggleTool', index: r.blockIdx });
+          if (anchor.pane === 'transcript') {
+            const r = lay.visible[anchor.row - lay.start];
+            if (r) {
+              const b = s.blocks[r.blockIdx];
+              if (b && b.tag === 'tool' && b.output)
+                dispatch({ type: 'toggleTool', index: r.blockIdx });
+            }
           }
+        } else if (anchor.pane === 'sidebar') {
+          // Release inside the sidebar: finalize the selection, or clear it if
+          // the drag collapsed back to a single point.
+          if (!inSidebarContent) return;
+          const headCol = colAtSidebar(sidebarIdx, e.x);
+          if (sidebarIdx === anchor.row && headCol === anchor.col)
+            dispatch({ type: 'setSelection', selection: undefined });
+          else
+            dispatch({
+              type: 'setSelection',
+              selection: {
+                pane: 'sidebar',
+                anchorRow: anchor.row,
+                anchorCol: anchor.col,
+                headRow: sidebarIdx,
+                headCol,
+              },
+            });
         } else if (inTranscript) {
           // Release inside the transcript: finalize the selection, or clear it
           // if the drag collapsed back to a single point.
@@ -796,6 +886,7 @@ export function App({
               dispatch({
                 type: 'setSelection',
                 selection: {
+                  pane: 'transcript',
                   anchorRow: anchor.row,
                   anchorCol: anchor.col,
                   headRow: lay.start + lineIdx,
@@ -804,7 +895,7 @@ export function App({
               });
           }
         }
-        // Release outside the transcript: keep the selection as-is.
+        // Release outside either pane: keep the selection as-is.
       }
     };
     return () => {
@@ -863,9 +954,10 @@ export function App({
           )}
           <Box flexDirection="column" height={transH}>
             {win.visible.map((r, i) => {
-              const sel = state.selection
-                ? selectionRange(state.selection, win.start + i, r.text.length)
-                : undefined;
+              const sel =
+                state.selection && state.selection.pane === 'transcript'
+                  ? selectionRange(state.selection, win.start + i, r.text.length)
+                  : undefined;
               return (
                 <TranscriptRow
                   key={win.start + i}
@@ -887,6 +979,7 @@ export function App({
             cwdName={basename(runnerRef.current.config.cwd)}
             total={allRows.length}
             visible={win.visible.length}
+            selection={state.selection?.pane === 'sidebar' ? state.selection : undefined}
           />
         )}
       </Box>

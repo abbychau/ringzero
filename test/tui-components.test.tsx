@@ -5,6 +5,7 @@ import { render } from 'ink-testing-library';
 import {
   StatusBar,
   Sidebar,
+  sidebarTextLines,
   ConfirmModal,
   SelectModal,
   InputModal,
@@ -192,4 +193,37 @@ test('TranscriptRow renders plainly without a selection', () => {
   const f = lastFrame()!;
   assert.ok(!f.includes('\x1b[7m'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(stripAnsi(f).includes('hello'), `frame was: ${JSON.stringify(f)}`);
+});
+
+test('sidebarTextLines returns selectable text lines with status and padding', () => {
+  const lines = sidebarTextLines(initial('m'), 'model-x', 'abc12345', 32000, 'proj', 3, 2, 26, 10);
+  assert.equal(lines.length, 8); // height 10 → box interior of 8 rows
+  assert.ok(lines[0]!.includes('RingZero · proj'), `lines: ${JSON.stringify(lines)}`);
+  assert.ok(
+    lines.some((l) => l.includes('model-x')),
+    `lines: ${JSON.stringify(lines)}`,
+  );
+  assert.ok(
+    lines.some((l) => l.includes('session abc12345')),
+    `lines: ${JSON.stringify(lines)}`,
+  );
+  const nonEmpty = lines.filter((l) => l !== '');
+  assert.ok(nonEmpty[nonEmpty.length - 1]!.includes('ready'), `lines: ${JSON.stringify(lines)}`);
+});
+
+test('Sidebar renders inverse highlight for a sidebar selection', () => {
+  const { lastFrame } = render(
+    <Sidebar
+      state={initial('m')}
+      model="m"
+      sessionId="abc123456789"
+      budget={32000}
+      height={10}
+      cwdName="myproj"
+      selection={{ pane: 'sidebar', anchorRow: 0, anchorCol: 5, headRow: 0, headCol: 9 }}
+    />,
+  );
+  const f = lastFrame()!;
+  assert.ok(f.includes('\x1b[7m'), `frame was: ${JSON.stringify(f)}`);
+  assert.ok(stripAnsi(f).includes('RingZero · myproj'), `frame was: ${JSON.stringify(f)}`);
 });

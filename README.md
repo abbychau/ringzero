@@ -147,8 +147,9 @@ ringzero --doctor               # environment self-check (exit 1 on problems)
 The layout is opencode-style: conversation on the left, a **right sidebar**
 (terminals ≥ 90 columns) holding the header (`RingZero · <working-dir name>`),
 model, session id, mode badges (`[plan]`, `[yolo]`, `[img]`), a live
-context-budget bar, token/cost totals, and the status line. On narrower
-terminals the sidebar hides and the header/status bar return to full width.
+context-budget bar, token/cost totals, and the status line. The sidebar has
+rounded corners and its text is selectable. On narrower terminals the sidebar
+hides and the header/status bar return to full width.
 
 `Enter` submit · `↑/↓` input history · `PgUp/PgDn` or **mouse wheel** scroll ·
 `Ctrl+P/L` model dialog / cycle favorites (`RINGZERO_MODELS`) · `Ctrl+K` command palette ·
@@ -157,8 +158,9 @@ terminals the sidebar hides and the header/status bar return to full width.
 `Ctrl+U` clear line · `Ctrl+W` delete word · `Ctrl+C` abort run / exit.
 **Drag with the mouse to select text** (or `Shift+↑/↓`, `Shift+PgUp/PgDn` after
 clicking the transcript) and press `Ctrl+Y` to copy the selection to the system
-clipboard; `Esc` clears the selection. Mouse-driven selection is CJK-safe:
-a click on a wide character selects the whole character.
+clipboard; `Esc` clears the selection. Selection works in both the transcript
+and the sidebar. Mouse-driven selection is CJK-safe: a click on a wide
+character selects the whole character.
 While the agent is running, **typing + Enter injects your message mid-run**
 (the current stream aborts and the run continues with your input).
 Permission prompts appear as an inline modal: `y` yes · `n` no · `a` always · `v` never.

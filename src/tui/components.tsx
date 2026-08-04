@@ -4,9 +4,11 @@ import { strWidth, truncateWidth } from './term.js';
 import {
   inputLineCol,
   fmtSession,
+  selectionRange,
   type Block,
   type Option,
   type PaletteItem,
+  type Selection,
   type State,
   type Usage,
 } from './state.js';
@@ -91,11 +93,6 @@ export function StatusBar({
   );
 }
 
-function padWidth(s: string, w: number): string {
-  const cur = strWidth(s);
-  return s + ' '.repeat(Math.max(0, w - cur));
-}
-
 function fmtBudget(n: number): string {
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
   return `${Math.round(n / 1000)}k`;
@@ -119,28 +116,21 @@ interface SidebarRow {
  * a box border. Rows it can't fit are trimmed from the tail; the status row is
  * always pinned to the bottom.
  */
-export function Sidebar({
-  state,
-  model,
-  sessionId,
-  budget,
-  height,
-  cwdName,
-  total = 0,
-  visible = 0,
-  width = SIDEBAR_W,
-}: {
-  state: State;
-  model: string;
-  sessionId?: string;
-  budget?: number;
-  height: number;
-  cwdName: string;
-  total?: number;
-  visible?: number;
-  width?: number;
-}): React.JSX.Element | null {
-  if (height < 3) return null;
+/**
+ * Builds the sidebar's rendered rows (styles + padding) so the same content is
+ * used for drawing and for the text-based selection model.
+ */
+function sidebarContent(
+  state: State,
+  model: string,
+  sessionId: string | undefined,
+  budget: number | undefined,
+  cwdName: string,
+  total: number,
+  visible: number,
+  width: number,
+  height: number,
+): { visibleRows: SidebarRow[]; avail: number; contentW: number } {
   const contentW = width - 4; // '│ ' + content + ' │'
   const rows: SidebarRow[] = [
     { text: `RingZero · ${cwdName}`, bold: true },
@@ -185,32 +175,122 @@ export function Sidebar({
 
   const avail = Math.max(1, height - 2);
   const visibleRows = [...rows.slice(0, Math.max(0, avail - 1)), status].slice(0, avail);
+  return { visibleRows, avail, contentW };
+}
+
+/**
+ * The sidebar's selectable text lines: one entry per rendered content row
+ * (visible rows first, then padding empties), matching the box's interior
+ * height. Used by the selection model (mouse mapping + copy).
+ */
+export function sidebarTextLines(
+  state: State,
+  model: string,
+  sessionId: string | undefined,
+  budget: number | undefined,
+  cwdName: string,
+  total: number,
+  visible: number,
+  width = SIDEBAR_W,
+  height: number,
+): string[] {
+  if (height < 3) return [];
+  const { visibleRows, avail, contentW } = sidebarContent(
+    state,
+    model,
+    sessionId,
+    budget,
+    cwdName,
+    total,
+    visible,
+    width,
+    height,
+  );
   const pad = Math.max(0, avail - visibleRows.length);
+  const lines = visibleRows.map((r) =>
+    truncateWidth(r.text ?? '', r.spinner ? contentW - 2 : contentW),
+  );
+  return [...lines, ...Array.from({ length: pad }, () => '')];
+}
+
+export function Sidebar({
+  state,
+  model,
+  sessionId,
+  budget,
+  height,
+  cwdName,
+  total = 0,
+  visible = 0,
+  width = SIDEBAR_W,
+  selection,
+}: {
+  state: State;
+  model: string;
+  sessionId?: string;
+  budget?: number;
+  height: number;
+  cwdName: string;
+  total?: number;
+  visible?: number;
+  width?: number;
+  /** Active selection confined to this pane (rows index into sidebarTextLines). */
+  selection?: Selection;
+}): React.JSX.Element | null {
+  if (height < 3) return null;
+  const { visibleRows, avail, contentW } = sidebarContent(
+    state,
+    model,
+    sessionId,
+    budget,
+    cwdName,
+    total,
+    visible,
+    width,
+    height,
+  );
+  const pad = Math.max(0, avail - visibleRows.length);
+  const sel = selection && selection.pane === 'sidebar' ? selection : undefined;
   return (
     <Box flexDirection="column" width={width}>
-      <Text dimColor>{'┌' + '─'.repeat(width - 2) + '┐'}</Text>
-      {visibleRows.map((r, i) =>
-        r.spinner ? (
+      <Text dimColor>{'╭' + '─'.repeat(width - 2) + '╮'}</Text>
+      {visibleRows.map((r, i) => {
+        const limit = r.spinner ? contentW - 2 : contentW;
+        const text = truncateWidth(r.text ?? '', limit);
+        const range = sel ? selectionRange(sel, i, text.length) : null;
+        let inner: React.ReactNode = text;
+        if (range && range.end > range.start) {
+          inner = (
+            <>
+              {text.slice(0, range.start)}
+              <Text inverse>{text.slice(range.start, range.end)}</Text>
+              {text.slice(range.end)}
+            </>
+          );
+        }
+        const padW = Math.max(0, limit - strWidth(text));
+        return r.spinner ? (
           <Text key={i} dimColor>
             {'│ '}
-            {state.running ? <Spinner /> : <Text dimColor>●</Text>}{' '}
-            {padWidth(truncateWidth(r.text ?? '', contentW - 2), contentW - 2)}
+            {state.running ? <Spinner /> : <Text dimColor>●</Text>} {inner}
+            {' '.repeat(padW)}
             {' │'}
           </Text>
         ) : (
           <Text key={i} color={r.color} dimColor={r.dim} bold={r.bold}>
             {'│ '}
-            {padWidth(truncateWidth(r.text ?? '', contentW), contentW)}
+            {inner}
+            {' '.repeat(padW)}
             {' │'}
           </Text>
-        ),
-      )}
+        );
+      })}
       {Array.from({ length: pad }, (_, i) => (
         <Text key={`p${i}`} dimColor>
           {'│' + ' '.repeat(width - 2) + '│'}
         </Text>
       ))}
-      <Text dimColor>{'└' + '─'.repeat(width - 2) + '┘'}</Text>
+      <Text dimColor>{'╰' + '─'.repeat(width - 2) + '╯'}</Text>
     </Box>
   );
 }

@@ -45,7 +45,12 @@ export interface Usage {
 }
 
 export interface Selection {
-  /** Absolute row index into the layoutBlocks output (survives scrolling). */
+  /**
+   * Row space the indices refer to: transcript rows or sidebar text lines.
+   * Absent means transcript (all current call sites set it explicitly).
+   */
+  pane?: 'transcript' | 'sidebar';
+  /** Absolute row index into the pane's rows (survives scrolling). */
   anchorRow: number;
   /** Character index (not terminal columns) within the row. */
   anchorCol: number;
@@ -471,7 +476,8 @@ export function selectionText(rows: Row[], sel: Selection): string {
 
 /**
  * Shift+arrow keyboard selection: extend the selection head by `delta` rows,
- * or start one at `fromRow` when there is no selection yet.
+ * or start one at `fromRow` when there is no selection yet. Keyboard selection
+ * always operates on the transcript pane.
  */
 export function shiftSelect(
   sel: Selection | undefined,
@@ -482,5 +488,5 @@ export function shiftSelect(
   const anchorRow = sel ? sel.anchorRow : fromRow;
   const anchorCol = sel ? sel.anchorCol : 0;
   const headRow = Math.max(0, Math.min(total - 1, (sel ? sel.headRow : fromRow) + delta));
-  return { anchorRow, anchorCol, headRow, headCol: sel ? sel.headCol : 0 };
+  return { pane: 'transcript', anchorRow, anchorCol, headRow, headCol: sel ? sel.headCol : 0 };
 }

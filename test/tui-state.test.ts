@@ -333,6 +333,7 @@ test('shiftSelect starts a selection at fromRow and extends it, clamped', () => 
   const rows = Array.from({ length: 10 }, (_, i) => ({ blockIdx: 0, text: `r${i}` }));
   // no selection yet → anchor at fromRow, head one row further
   assert.deepEqual(shiftSelect(undefined, rows.length, 4, -1), {
+    pane: 'transcript',
     anchorRow: 4,
     anchorCol: 0,
     headRow: 3,
@@ -341,12 +342,13 @@ test('shiftSelect starts a selection at fromRow and extends it, clamped', () => 
   // extend an existing selection
   assert.deepEqual(
     shiftSelect({ anchorRow: 4, anchorCol: 0, headRow: 3, headCol: 0 }, rows.length, 4, 1),
-    { anchorRow: 4, anchorCol: 0, headRow: 4, headCol: 0 },
+    { pane: 'transcript', anchorRow: 4, anchorCol: 0, headRow: 4, headCol: 0 },
   );
   // clamps at the top
   assert.deepEqual(
     shiftSelect({ anchorRow: 4, anchorCol: 0, headRow: 3, headCol: 0 }, rows.length, 4, -9),
     {
+      pane: 'transcript',
       anchorRow: 4,
       anchorCol: 0,
       headRow: 0,
@@ -357,10 +359,22 @@ test('shiftSelect starts a selection at fromRow and extends it, clamped', () => 
   assert.deepEqual(
     shiftSelect({ anchorRow: 4, anchorCol: 0, headRow: 3, headCol: 0 }, rows.length, 4, 99),
     {
+      pane: 'transcript',
       anchorRow: 4,
       anchorCol: 0,
       headRow: 9,
       headCol: 0,
     },
+  );
+  // keyboard selection always lands on the transcript pane, even when a
+  // sidebar selection exists (mouse-made selections carry their own pane)
+  assert.deepEqual(
+    shiftSelect(
+      { pane: 'sidebar', anchorRow: 1, anchorCol: 0, headRow: 2, headCol: 3 },
+      rows.length,
+      4,
+      1,
+    ),
+    { pane: 'transcript', anchorRow: 1, anchorCol: 0, headRow: 3, headCol: 3 },
   );
 });
