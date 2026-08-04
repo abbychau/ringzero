@@ -121,6 +121,8 @@ export function loadConfig(): AppConfig {
       list_dir: 'allow',
       tree: 'allow',
       git_log: 'allow',
+      web_search: 'allow',
+      http_request: 'ask',
       write_file: 'ask',
       edit_file: 'ask',
       bash: 'ask',

@@ -36,6 +36,8 @@ import { compactHistory, estimateContextTokens } from '../kernel/context.js';
 import type { Provider, SessionMessage, Tool } from '../kernel/types.js';
 import { createTodoTool, type TodoItem } from '../tools/todo.js';
 import { askUserTool } from '../tools/ask.js';
+import { webSearchTool } from '../tools/search_web.js';
+import { httpRequestTool } from '../tools/http.js';
 
 export interface RunnerOptions {
   sessionId?: string;
@@ -127,9 +129,15 @@ export class Runner {
   agent(signal?: AbortSignal): Agent {
     this.history = this.sessionId ? this.store.load(this.sessionId) : this.history;
     const provider = this.makeProvider();
+    // web_search is opt-in: registered only when a search key is configured.
+    const searchKey = process.env.RINGZERO_SEARCH_KEY?.trim();
     const tools = [
       ...defaultTools(),
       askUserTool(),
+      ...(searchKey
+        ? [webSearchTool({ apiKey: searchKey, endpoint: process.env.RINGZERO_SEARCH_ENDPOINT })]
+        : []),
+      httpRequestTool(),
       createTodoTool(this.todos, () => this.saveTodos()),
       createTaskTool({
         provider,

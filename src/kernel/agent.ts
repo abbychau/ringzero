@@ -23,9 +23,13 @@ const READ_ONLY_TOOLS = new Set([
   'read_file',
   'grep',
   'glob',
+  'list_dir',
+  'tree',
   'git_status',
   'git_diff',
+  'git_log',
   'web_fetch',
+  'web_search',
 ]);
 
 /** Pure tools whose identical repeated calls are deduped within a run. */
@@ -33,8 +37,11 @@ const CACHEABLE_TOOLS = new Set([
   'read_file',
   'grep',
   'glob',
+  'list_dir',
+  'tree',
   'git_status',
   'git_diff',
+  'git_log',
   'web_fetch',
 ]);
 
