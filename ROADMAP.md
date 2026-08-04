@@ -120,6 +120,10 @@ token-efficient, zero-dep, CJK-first, UX/operability first.
 - [ ] **P5.5 Auto session titles** — the first user message becomes the
       session title (fallback to the current default), so `/sessions`,
       `/export`, and `--sessions` show useful names.
+- [x] **P5.6 `/copy` clipboard command** — `/copy [n|all]` copies the last
+      assistant message / last `n` / full transcript to the OS clipboard
+      (zero-dep `clip`/`pbcopy`/`xclip`/`wl-copy`/`xsel`), since mouse drag
+      selection is unavailable under mouse-reporting + alternate screen.
 
 ## P6 — Cost & research
 

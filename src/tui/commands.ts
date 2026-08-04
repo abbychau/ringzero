@@ -9,6 +9,9 @@ import {
   type State,
 } from './state.js';
 import { estimateCost, fmtCost, cacheHitRate } from '../kernel/cost.js';
+import { copyToClipboard } from './clipboard.js';
+import { exportMarkdown } from '../session/export.js';
+import type { SessionMessage } from '../kernel/types.js';
 
 /** Everything handleSlashCommand needs from the App component. */
 export interface CommandDeps {
@@ -22,6 +25,28 @@ export interface CommandDeps {
   quit: () => void;
 }
 
+const COPY_UNAVAILABLE = '(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)';
+
+export type CopyPick =
+  { ok: true; text: string; count: number } | { ok: false; reason: 'none' | 'bad-arg' };
+
+/**
+ * Pick the text /copy copies: the last assistant message by default, or the
+ * last `n` assistant messages when the arg is a positive integer. Empty
+ * assistant blocks (tool-only turns) are skipped.
+ */
+export function copySelection(msgs: SessionMessage[], arg?: string): CopyPick {
+  const assistants = msgs.filter((m) => m.role === 'assistant' && m.content.trim());
+  if (arg !== undefined) {
+    const n = Number(arg);
+    if (!Number.isInteger(n) || n < 1) return { ok: false, reason: 'bad-arg' };
+  }
+  if (!assistants.length) return { ok: false, reason: 'none' };
+  const n = arg === undefined ? 1 : Math.min(Number(arg), assistants.length);
+  const picked = assistants.slice(-n);
+  return { ok: true, text: picked.map((m) => m.content).join('\n\n'), count: picked.length };
+}
+
 /** Handle a "/command …" line: built-in commands, then plugin commands. */
 export async function handleSlashCommand(line: string, deps: CommandDeps): Promise<void> {
   const [cmd, ...rest] = line.slice(1).split(/\s+/);
@@ -30,7 +55,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   switch (cmd) {
     case 'help':
       pushSys(
-        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /yolo [on|off] /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
+        'commands: /help /usage /context /model [id] /compact /copy [n|all] /permission <tool> <allow|ask|deny> /yolo [on|off] /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
       );
       break;
     case 'usage': {
@@ -262,6 +287,39 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
       } catch (e) {
         pushSys(`image error: ${e instanceof Error ? e.message : String(e)}`);
       }
+      break;
+    }
+    case 'copy': {
+      const arg = rest[0];
+      if (arg === 'all') {
+        if (!r.sessionId) {
+          pushSys('(no session)');
+          break;
+        }
+        const md = exportMarkdown(r.store, r.sessionId);
+        if (md === null) {
+          pushSys('(session not found)');
+          break;
+        }
+        const ok = await copyToClipboard(md);
+        pushSys(
+          ok
+            ? `copied ${md.length.toLocaleString()} chars (full transcript) to clipboard`
+            : COPY_UNAVAILABLE,
+        );
+        break;
+      }
+      const pick = copySelection(r.sessionId ? r.store.load(r.sessionId) : [], arg);
+      if (!pick.ok) {
+        pushSys(pick.reason === 'bad-arg' ? 'usage: /copy [n|all]' : '(no assistant message yet)');
+        break;
+      }
+      const copied = await copyToClipboard(pick.text);
+      pushSys(
+        copied
+          ? `copied ${pick.count} message(s) · ${pick.text.length.toLocaleString()} chars to clipboard`
+          : COPY_UNAVAILABLE,
+      );
       break;
     }
     case 'export': {

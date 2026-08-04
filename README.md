@@ -162,11 +162,15 @@ Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 
 ### Slash commands (REPL & TUI)
 
-`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /yolo [on|off]  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
+`/help  /usage  /model [id]  /compact  /copy [n|all]  /permission <tool> <allow|ask|deny>  /yolo [on|off]  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
 
 `/image <path>` attaches an image to your next message (shown as `[img]` in the
 sidebar); `/image clear` removes it. `/export [path]` writes the current session
 as a Markdown transcript (default: `transcript-<id>.md` in the cwd).
+`/copy [n|all]` copies the last assistant message (or the last `n`, or the full
+transcript) to the OS clipboard — zero-dep: `clip` / `pbcopy` / `xclip` /
+`wl-copy` / `xsel` — handy when terminal selection is unavailable (mouse mode +
+alternate screen).
 
 `/tools` opens a toggle menu (TUI) — Enter flips a tool on/off, Esc closes — or
 in the REPL lists every tool (`[on]`/`[off]`), toggles one by name, and `reset`
