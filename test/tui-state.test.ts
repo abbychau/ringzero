@@ -168,9 +168,9 @@ test('slashMatches filters commands by prefix (and a lone slash shows all)', () 
   assert.ok(all.includes('exit'));
   assert.deepEqual(slashMatches('/c'), ['context', 'compact', 'commit', 'checkpoint']);
   assert.deepEqual(slashMatches('/com'), ['compact', 'commit']);
-  // plan/todos are registered for autocomplete
+  // plan/todos/tools are registered for autocomplete
   assert.deepEqual(slashMatches('/p'), ['permission', 'plan']);
-  assert.deepEqual(slashMatches('/t'), ['todos']);
+  assert.deepEqual(slashMatches('/t'), ['todos', 'tools']);
   // plugin extras are merged and deduped against built-ins
   assert.ok(slashMatches('/', ['mcp-list']).includes('mcp-list'));
   assert.deepEqual(slashMatches('/m', ['mcp-list']), ['model', 'mcp-list']);

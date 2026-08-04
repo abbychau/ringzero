@@ -25,9 +25,14 @@ disclosure (skills), and ephemeral sub-agents.
   the current stream aborts, your message is queued, and the run continues with
   it (TUI, REPL, and RPC `prompt {interrupt:true}`).
 - **Tools** — read (full / range / auto-outline for large files) / write / edit,
-  grep, glob, `related_files` (importers + same-symbol files), bash, web
-  fetch, `git_status` / `git_diff` / `git_commit`, `plan`, `todo`, `task`
-  (sub-agent), MCP.
+  `list_dir` / `tree` / grep (incl. `files_only`) / glob, `related_files`
+  (importers + same-symbol files), bash, `web_fetch`, `web_search` (opt-in),
+  `http_request` (SSRF-guarded), `git_status` / `git_diff` / `git_log` /
+  `git_commit`, `plan`, `todo`, `task` (sub-agent), `ask_user`, MCP.
+- **Tool toggles** — `/tools` (TUI menu) / `/tools [name|reset]` (REPL) lets you
+  hide tools from the agent; `disabledTools` and `/permission` overrides persist
+  to `config.json` (`~/.ringzero/config.json` global, merged with
+  `.ringzero/config.json` per project).
 - **Plan mode** — `/plan` gates the agent: only read-only tools run until it
   presents a plan via the `plan` tool and you approve it; approved plans run
   without further permission prompts.
@@ -146,11 +151,15 @@ Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 
 ### Slash commands (REPL & TUI)
 
-`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /export [path]  /new  /exit`
+`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
 
 `/image <path>` attaches an image to your next message (shown as `[img]` in the
 header); `/image clear` removes it. `/export [path]` writes the current session
 as a Markdown transcript (default: `transcript-<id>.md` in the cwd).
+
+`/tools` opens a toggle menu (TUI) — Enter flips a tool on/off, Esc closes — or
+in the REPL lists every tool (`[on]`/`[off]`), toggles one by name, and `reset`
+re-enables all. Disabled tools are hidden from the agent until re-enabled.
 
 `/usage` shows the session token totals with cache hit rate and estimated cost
 (per-turn breakdown too); the StatusBar keeps a live cost estimate for the
@@ -163,6 +172,16 @@ tools (`read_file`, `grep`, `glob`, `git_status`, `git_diff`, `web_fetch`) are
 allowed until the agent presents a plan with the `plan` tool and you approve it.
 Once approved, the rest of the turn runs without further permission prompts.
 Rejected plans keep the gate closed — the agent must revise and re-present.
+
+### Persistent config
+
+`/permission` overrides (and `always`/`never` answers) plus `/tools` toggles
+persist to `~/.ringzero/config.json` (global). A project-level
+`.ringzero/config.json` merges on top and wins per key — handy for
+repo-specific defaults (`.ringzero/` is gitignored by default). Disabled tools
+are a union across both files: a repo can disable more, but only the global
+file can re-enable. The config file is JSON with `disabledTools` (array) and
+`permissionOverrides` (tool → `allow|ask|deny`).
 
 ### Checkpoints & rollback
 
@@ -252,6 +271,9 @@ echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}'
 | `RINGZERO_NOTIFY_MIN`                   | `30`              | minimum run length (seconds) before a completion notification fires                                                                                               |
 | `RINGZERO_SESSION_LIMIT`                | `50`              | max sessions kept; older ones archive to `<sessions>/archive`                                                                                                     |
 | `RINGZERO_SESSION_KEEP_DAYS`            | `0`               | archive sessions older than N days (`0` = off)                                                                                                                    |
+| `RINGZERO_SEARCH_KEY`                   | —                 | API key enabling the `web_search` tool (Tavily-compatible)                                                                                                        |
+| `RINGZERO_SEARCH_ENDPOINT`              | Tavily API        | search endpoint for `web_search` (POST `{api_key, query, max_results}`)                                                                                           |
+| `RINGZERO_OS_ENCODING`                  | system locale     | force the legacy console codepage used to decode `cmd`/PowerShell output (e.g. `gbk`, `big5`, `shift-jis`)                                                        |
 
 ### Workspace sandbox
 

@@ -136,16 +136,32 @@ export function SelectModal({
   options: Option[];
   index: number;
 }): React.JSX.Element {
+  // Window around the selected index so long lists (e.g. /tools) fit any
+  // terminal height; the selection always stays in view.
+  const WINDOW = 10;
+  const start = Math.max(0, Math.min(index - Math.floor(WINDOW / 2), options.length - WINDOW));
+  const shown = options.slice(start, start + WINDOW);
   return (
     <Box flexDirection="column">
       <Text bold>{title}</Text>
-      {options.map((o, i) => (
-        <Text key={o.value} color={i === index ? 'cyan' : undefined} inverse={i === index}>
-          {i === index ? '▸ ' : '  '}
-          {truncateWidth(o.label, 60)}
-          {o.hint ? <Text dimColor> {o.hint}</Text> : null}
-        </Text>
-      ))}
+      {start > 0 ? <Text dimColor>… {start} more above</Text> : null}
+      {shown.map((o, i) => {
+        const realIndex = start + i;
+        return (
+          <Text
+            key={o.value}
+            color={realIndex === index ? 'cyan' : undefined}
+            inverse={realIndex === index}
+          >
+            {realIndex === index ? '▸ ' : '  '}
+            {truncateWidth(o.label, 60)}
+            {o.hint ? <Text dimColor> {o.hint}</Text> : null}
+          </Text>
+        );
+      })}
+      {options.length - start - shown.length > 0 ? (
+        <Text dimColor>… {options.length - start - shown.length} more below</Text>
+      ) : null}
     </Box>
   );
 }

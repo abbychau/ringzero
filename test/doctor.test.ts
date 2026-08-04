@@ -18,6 +18,7 @@ function fakeConfig(over: Partial<AppConfig> = {}): AppConfig {
     },
     cwd: dir,
     home: tmpdir(),
+    ringzeroHome: join(dir, 'ringzero-home'),
     workspace: undefined,
     sessionsDir: join(dir, 'sessions'),
     skillsDirs: [],

@@ -9,6 +9,8 @@ export interface AppConfig {
   env: Env;
   cwd: string;
   home: string;
+  /** RingZero data dir (~/.ringzero by default; RINGZERO_HOME overrides). */
+  ringzeroHome: string;
   /** Optional root that fs tools are locked to (paths outside are rejected). */
   workspace?: string;
   sessionsDir: string;
@@ -102,6 +104,7 @@ export function loadConfig(): AppConfig {
     env,
     cwd,
     home,
+    ringzeroHome,
     workspace,
     sessionsDir,
     skillsDirs: [join(cwd, '.ringzero', 'skills'), join(ringzeroHome, 'skills')],

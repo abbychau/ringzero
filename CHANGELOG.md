@@ -53,12 +53,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `git_commit` tool + `/commit <msg>` (TUI + REPL): stages everything
   (`git add -A`) and commits; returns the short id, `(nothing to commit)`, or
   an error (`src/tools/git.ts`).
+- `list_dir` / `tree` exploration tools (workspace-sandboxed, entry/line
+  caps), `grep files_only`, `git_log` (path/search/stat/count), and a date
+  block in the system prompt for correct commit messages (`src/tools/explore.ts`,
+  `src/tools/git.ts`, `src/config/config.ts`).
+- `ask_user` tool: the agent can pause mid-run and ask the user a question
+  (TUI modal / REPL prompt); non-interactive modes get `(unavailable)`
+  (`src/tools/ask.ts`).
+- `web_search` (opt-in via `RINGZERO_SEARCH_KEY` / `RINGZERO_SEARCH_ENDPOINT`,
+  Tavily-compatible) and `http_request` (GET/POST/PUT/PATCH/DELETE,
+  SSRF-guarded, ask by default) tools (`src/tools/search_web.ts`, `src/tools/http.ts`).
+- `/tools` menu (TUI) + `/tools [name|reset]` (REPL): disable tools for the
+  agent; the TUI select list now windows around the cursor so long rosters
+  fit any terminal height (`src/tui/commands.ts`, `src/cli/repl.ts`,
+  `src/tui/components.tsx`).
+- Persistent prefs: `disabledTools` and permission overrides (`/permission`,
+  `always`/`never` answers) survive restarts via `~/.ringzero/config.json`
+  merged with `.ringzero/config.json` (project wins per key)
+  (`src/config/prefs.ts`, `src/permission/gate.ts`).
 
 ### Changed
 
 - Workspace sandbox auto-detect: with `RINGZERO_WORKSPACE` unset, fs tools are
   locked to the git work-tree root (`detectGitRoot`, `src/config/config.ts`);
   `off`/`none` disables the sandbox.
+- Permission overrides are now persisted instead of living only in memory:
+  the gate fires `onOverride` so the runner can write `config.json`.
+- `SelectModal` (sessions, tools menu) windows long option lists around the
+  selection instead of overflowing the terminal.
 
 - Provider registry order: `API_URL` wins, then Anthropic, then Gemini.
 - TUI: mid-run Enter injects instead of dropping input; `[img]` indicator in

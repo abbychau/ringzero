@@ -138,7 +138,7 @@ async function handleSlash(
   switch (cmd) {
     case 'help':
       console.log(
-        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /image <path>  /new  /exit',
+        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools [name|reset]  /image <path>  /new  /exit',
       );
       break;
     case 'usage': {
@@ -177,14 +177,31 @@ async function handleSlash(
       }
       break;
     }
-    case 'tools':
+    case 'tools': {
+      const list = runner.listTools();
+      const arg = rest[0];
+      if (arg === 'reset') {
+        for (const t of list) runner.setToolEnabled(t.name, true);
+        console.log('all tools enabled');
+        break;
+      }
+      if (arg) {
+        const t = list.find((x) => x.name === arg);
+        if (!t) {
+          console.log(`unknown tool: ${arg} (see /tools)`);
+          break;
+        }
+        runner.setToolEnabled(t.name, !t.enabled);
+        console.log(`${t.name} ${t.enabled ? 'disabled' : 'enabled'}`);
+        break;
+      }
       console.log(
-        runner
-          .agent()
-          .toolDefs.map((t) => t.name)
-          .join(', '),
+        list
+          .map((t) => `${t.enabled ? '[on]' : '[off]'} ${t.name} — ${t.description}`)
+          .join('\n') || '(no tools)',
       );
       break;
+    }
     case 'skills': {
       if (rest[0]) {
         if (rest[0] === 'off' && rest[1]) {

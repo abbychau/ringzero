@@ -30,7 +30,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   switch (cmd) {
     case 'help':
       pushSys(
-        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
+        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
       );
       break;
     case 'usage': {
@@ -205,6 +205,27 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
         pushSys(
           '(no todos)' + (r.isPlanMode() ? ' — plan mode is on, ask the agent to plan first' : ''),
         );
+      }
+      break;
+    }
+    case 'tools': {
+      // Toggle loop: re-fetch the roster each iteration so the menu reflects
+      // changes immediately; Esc closes. Choices persist to config.json.
+      while (true) {
+        const tools = r.listTools();
+        const v = await deps.openSelect(
+          'Tools — Enter toggles, Esc closes',
+          tools.map((t) => ({
+            label: `${t.name} — ${t.description}`,
+            value: t.name,
+            hint: t.enabled ? 'ON' : 'off',
+          })),
+        );
+        if (!v) break;
+        const t = tools.find((x) => x.name === v);
+        if (!t) break;
+        r.setToolEnabled(v, !t.enabled);
+        pushSys(`${v} ${t.enabled ? 'disabled' : 'enabled'}`);
       }
       break;
     }

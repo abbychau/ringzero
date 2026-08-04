@@ -8,21 +8,31 @@ export interface PermissionGateOptions {
   rules?: Record<string, PermissionRule>;
   /** Prompt the user; must resolve to one of the AskResponse values. */
   ask(prompt: string): Promise<AskResponse>;
+  /** Fired whenever a persistent override changes (e.g. to persist to disk). */
+  onOverride?: (toolName: string, rule: PermissionRule) => void;
 }
 
 export class PermissionGate {
   private rules: Record<string, PermissionRule>;
   private overrides = new Map<string, PermissionRule>();
   private readonly askFn: (p: string) => Promise<AskResponse>;
+  private readonly onOverride?: (toolName: string, rule: PermissionRule) => void;
 
   constructor(opts: PermissionGateOptions) {
     this.rules = { ...opts.rules };
     this.askFn = opts.ask;
+    this.onOverride = opts.onOverride;
   }
 
   /** Set a persistent per-tool override (e.g. from /permission allow bash). */
   setOverride(toolName: string, rule: PermissionRule): void {
     this.overrides.set(toolName, rule);
+    this.onOverride?.(toolName, rule);
+  }
+
+  /** Snapshot of all persistent per-tool overrides (for saving to disk). */
+  listOverrides(): Record<string, PermissionRule> {
+    return { ...Object.fromEntries(this.overrides) };
   }
 
   clearOverride(toolName: string): void {

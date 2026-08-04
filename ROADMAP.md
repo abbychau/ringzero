@@ -172,25 +172,25 @@ hard output caps, opt-in config-gated tools.
 
 ## T2 — Interaction
 
-- [ ] **T2.1 `ask_user`** — agent pauses and asks the user a question mid-run
+- [x] **T2.1 `ask_user`** — agent pauses and asks the user a question mid-run
       (free text or numbered choices); interactive sessions only (TUI modal /
       REPL question); one-shot/RPC/sub-agents return `(unavailable)`.
 
 ## T3 — Opt-in network tools (config-gated, like `web_search`)
 
-- [ ] **T3.1 `web_search`** — Tavily-compatible search registered only when
+- [x] **T3.1 `web_search`** — Tavily-compatible search registered only when
       `RINGZERO_SEARCH_KEY` + `RINGZERO_SEARCH_ENDPOINT` are set.
-- [ ] **T3.2 `http_request`** — generic JSON API calls (GET/POST/PUT/PATCH/
+- [x] **T3.2 `http_request`** — generic JSON API calls (GET/POST/PUT/PATCH/
       DELETE) reusing the SSRF guard; permission `ask` by default.
 
 ## T4 — User preferences & persistence
 
-- [ ] **T4.1 `/tools` menu (TUI) + `/tools [name]` (REPL)** — toggle which
+- [x] **T4.1 `/tools` menu (TUI) + `/tools [name]` (REPL)** — toggle which
       tools the agent sees; state persisted to `config.json`.
-- [ ] **T4.2 Persistent config** — `~/.ringzero/config.json` (global) merged
+- [x] **T4.2 Persistent config** — `~/.ringzero/config.json` (global) merged
       with `.ringzero/config.json` (project); stores `disabledTools` and
       `permissionOverrides`.
-- [ ] **T4.3 Permission override persistence** — `/permission` (and the
+- [x] **T4.3 Permission override persistence** — `/permission` (and the
       `always`/`never` answers) survive restarts instead of living only in
       memory.
 

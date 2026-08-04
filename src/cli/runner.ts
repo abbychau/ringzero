@@ -1,5 +1,6 @@
 import type { AppConfig } from '../config/config.js';
 import { num } from '../config/config.js';
+import { loadPrefs, savePrefs, type PrefsPaths } from '../config/prefs.js';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -71,6 +72,8 @@ export class Runner {
   private pluginToolAfterHooks: ((i: ToolAfterInput) => Promise<ToolAfterResult | void>)[] = [];
   private skillTools = new Map<string, Tool[]>();
   private promptUserFn?: (prompt: string) => Promise<string | null>;
+  private disabledTools = new Set<string>();
+  private prefsPaths: PrefsPaths;
   /** Set by the UI to receive plugin say() output. */
   pluginSay?: (text: string) => void;
 
@@ -87,10 +90,21 @@ export class Runner {
     this.planMode =
       opts.planMode ??
       (process.env.RINGZERO_PLAN_MODE === '1' || process.env.RINGZERO_PLAN_MODE === 'true');
+    this.prefsPaths = {
+      project: join(config.cwd, '.ringzero', 'config.json'),
+      global: join(config.ringzeroHome, 'config.json'),
+    };
+    const prefs = loadPrefs(this.prefsPaths);
+    this.disabledTools = prefs.disabledTools;
     this.gate = new PermissionGate({
       rules: config.permissions,
       ask: opts.ask ?? (async () => 'no' as const),
+      // Persist overrides (also fired by always/never answers) to config.json.
+      onOverride: () => this.savePrefs(),
     });
+    for (const [name, rule] of Object.entries(prefs.permissionOverrides)) {
+      this.gate.setOverride(name, rule);
+    }
     // Housekeeping: archive old/excess sessions (env-tunable, off by default
     // except for the 50-session cap). Never archives the session being resumed.
     this.store.prune({
@@ -129,31 +143,7 @@ export class Runner {
   agent(signal?: AbortSignal): Agent {
     this.history = this.sessionId ? this.store.load(this.sessionId) : this.history;
     const provider = this.makeProvider();
-    // web_search is opt-in: registered only when a search key is configured.
-    const searchKey = process.env.RINGZERO_SEARCH_KEY?.trim();
-    const tools = [
-      ...defaultTools(),
-      askUserTool(),
-      ...(searchKey
-        ? [webSearchTool({ apiKey: searchKey, endpoint: process.env.RINGZERO_SEARCH_ENDPOINT })]
-        : []),
-      httpRequestTool(),
-      createTodoTool(this.todos, () => this.saveTodos()),
-      createTaskTool({
-        provider,
-        permission: this.gate,
-        cwd: this.config.cwd,
-        home: this.config.home,
-        contextBudget: this.config.contextBudget,
-        preserveRecentTokens: this.config.preserveRecentTokens,
-      }),
-      ...(this.config.verifyCommand
-        ? [createVerifyTool(this.config.verifyCommand, this.config.cwd)]
-        : []),
-      ...[...this.skillTools.values()].flat(),
-      ...this.pluginTools,
-      ...this.mcpTools,
-    ];
+    const tools = this.buildTools(provider);
     // Snapshot the worktree once per run, before the first tool call, so
     // /rollback can undo everything the agent did in this run.
     let checkpointed = false;
@@ -222,6 +212,62 @@ export class Runner {
         this.store.replace(this.sessionId, messages);
         this.history = messages;
       },
+    });
+  }
+
+  /** Full tool roster for this run, minus user-disabled tools (via /tools). */
+  private buildTools(provider: Provider): Tool[] {
+    // web_search is opt-in: registered only when a search key is configured.
+    const searchKey = process.env.RINGZERO_SEARCH_KEY?.trim();
+    const tools = [
+      ...defaultTools(),
+      askUserTool(),
+      ...(searchKey
+        ? [webSearchTool({ apiKey: searchKey, endpoint: process.env.RINGZERO_SEARCH_ENDPOINT })]
+        : []),
+      httpRequestTool(),
+      createTodoTool(this.todos, () => this.saveTodos()),
+      createTaskTool({
+        provider,
+        permission: this.gate,
+        cwd: this.config.cwd,
+        home: this.config.home,
+        contextBudget: this.config.contextBudget,
+        preserveRecentTokens: this.config.preserveRecentTokens,
+      }),
+      ...(this.config.verifyCommand
+        ? [createVerifyTool(this.config.verifyCommand, this.config.cwd)]
+        : []),
+      ...[...this.skillTools.values()].flat(),
+      ...this.pluginTools,
+      ...this.mcpTools,
+    ];
+    return tools.filter((t) => !this.disabledTools.has(t.definition.name));
+  }
+
+  /** Current tool roster for the UI (/tools): name, short description, enabled. */
+  listTools(): { name: string; description: string; enabled: boolean }[] {
+    return this.buildTools(this.makeProvider()).map((t) => ({
+      name: t.definition.name,
+      description: t.definition.description.slice(0, 80),
+      enabled: !this.disabledTools.has(t.definition.name),
+    }));
+  }
+
+  /** Enable/disable a tool for the agent; persisted to config.json. */
+  setToolEnabled(name: string, enabled: boolean): boolean {
+    if (!this.listTools().some((t) => t.name === name)) return false;
+    if (enabled) this.disabledTools.delete(name);
+    else this.disabledTools.add(name);
+    this.savePrefs();
+    return true;
+  }
+
+  /** Persist disabled tools + permission overrides to the global config.json. */
+  private savePrefs(): void {
+    savePrefs(this.prefsPaths, {
+      disabledTools: this.disabledTools,
+      permissionOverrides: this.gate.listOverrides(),
     });
   }
 

@@ -308,6 +308,7 @@ export function slashCommands(): string[] {
     'rollback',
     'plan',
     'todos',
+    'tools',
     'image',
     'export',
     'exit',

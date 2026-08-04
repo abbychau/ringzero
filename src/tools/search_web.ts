@@ -15,8 +15,7 @@ export function webSearchTool(cfg: { apiKey: string; endpoint?: string }): Tool 
   return {
     definition: {
       name: 'web_search',
-      description:
-        `Search the web (Tavily-compatible endpoint). Returns up to ${MAX_RESULTS} results with title, url, and a content excerpt. Only available when RINGZERO_SEARCH_KEY is configured.`,
+      description: `Search the web (Tavily-compatible endpoint). Returns up to ${MAX_RESULTS} results with title, url, and a content excerpt. Only available when RINGZERO_SEARCH_KEY is configured.`,
       inputSchema: {
         type: 'object',
         properties: {
@@ -51,8 +50,9 @@ export function webSearchTool(cfg: { apiKey: string; endpoint?: string }): Tool 
         return results
           .map(
             (r, i) =>
-              `${i + 1}. ${r.title ?? '(untitled)'}\n   ${r.url ?? ''}\n   ${(r.content ?? '')
-                .slice(0, SNIPPET)}`,
+              `${i + 1}. ${r.title ?? '(untitled)'}\n   ${r.url ?? ''}\n   ${(
+                r.content ?? ''
+              ).slice(0, SNIPPET)}`,
           )
           .join('\n');
       } catch (e) {

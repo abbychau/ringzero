@@ -36,10 +36,19 @@ test('ask_user reports unavailable when no promptUser channel exists', async () 
 });
 
 test('ask_user handles cancel and empty answers', async () => {
-  const cancelled = await askUserTool().execute({ prompt: 'q' }, ctx(async () => null));
+  const cancelled = await askUserTool().execute(
+    { prompt: 'q' },
+    ctx(async () => null),
+  );
   assert.ok(cancelled.includes('cancelled'), cancelled);
-  const empty = await askUserTool().execute({ prompt: 'q' }, ctx(async () => '   '));
+  const empty = await askUserTool().execute(
+    { prompt: 'q' },
+    ctx(async () => '   '),
+  );
   assert.ok(empty.includes('empty'), empty);
-  const noPrompt = await askUserTool().execute({}, ctx(async () => 'x'));
+  const noPrompt = await askUserTool().execute(
+    {},
+    ctx(async () => 'x'),
+  );
   assert.ok(noPrompt.startsWith('error'), noPrompt);
 });
