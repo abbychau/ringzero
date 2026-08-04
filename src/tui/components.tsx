@@ -277,16 +277,17 @@ export function Sidebar({
             {' │'}
           </Text>
         ) : (
-          // Borders stay in the box's dim style; only the content inherits the
-          // row's color/weight so the frame reads as one continuous box.
-          <Text key={i} dimColor>
-            {'│ '}
+          // Borders are their own dim Texts: the content's closing codes (e.g.
+          // SGR 22 resets both bold and dim) would otherwise un-dim the right
+          // border. Separating them keeps the frame one continuous dim box.
+          <Box key={i} flexDirection="row">
+            <Text dimColor>{'│ '}</Text>
             <Text color={r.color} dimColor={r.dim} bold={r.bold}>
               {inner}
               {' '.repeat(padW)}
             </Text>
-            {' │'}
-          </Text>
+            <Text dimColor>{' │'}</Text>
+          </Box>
         );
       })}
       {Array.from({ length: pad }, (_, i) => (
