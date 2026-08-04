@@ -144,12 +144,13 @@ ringzero --doctor               # environment self-check (exit 1 on problems)
 
 ### TUI keys
 
-The layout is opencode-style: conversation on the left, a **right sidebar**
-(terminals ≥ 90 columns) holding the header (`RingZero · <working-dir name>`),
-model, session id, mode badges (`[plan]`, `[yolo]`, `[img]`), a live
-context-budget bar, token/cost totals, and the status line. The sidebar has
-rounded corners and its text is selectable. On narrower terminals the sidebar
-hides and the header/status bar return to full width.
+The layout is opencode-style: conversation on the left, a one-column gap, and
+a **right sidebar** (terminals ≥ 90 columns) holding the header
+(`RingZero · <working-dir name>`), model, session id, mode badges
+(`[plan]`, `[yolo]`, `[img]`), a live context-budget bar, token/cost totals,
+and the status line. The sidebar has rounded corners and its text is
+selectable. On narrower terminals the sidebar hides and the header/status bar
+return to full width.
 
 `Enter` submit · `↑/↓` input history · `PgUp/PgDn` or **mouse wheel** scroll ·
 `Ctrl+P/L` model dialog / cycle favorites (`RINGZERO_MODELS`) · `Ctrl+K` command palette ·

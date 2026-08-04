@@ -65,6 +65,8 @@ interface AppProps {
 
 /** Smallest main-pane width (cols) that still keeps the sidebar on screen. */
 const SIDEBAR_MIN_MAIN = 64;
+/** Blank column between the transcript and the sidebar. */
+const SIDEBAR_GAP = 1;
 
 /**
  * Rows consumed by the open modal, including the "Esc cancels · Enter confirms"
@@ -126,10 +128,10 @@ export function App({
     initial(initialModel, runner.isPlanMode(), runner.yolo),
   );
   const { rows: termRows, columns } = useWindowSize();
-  // Narrow terminals (< SIDEBAR_W + SIDEBAR_MIN_MAIN cols) fall back to the
-  // full-width layout so 80-col terminals stay usable.
-  const showSidebar = columns >= SIDEBAR_W + SIDEBAR_MIN_MAIN;
-  const mainW = showSidebar ? columns - SIDEBAR_W : columns;
+  // Narrow terminals (< SIDEBAR_W + gap + SIDEBAR_MIN_MAIN cols) fall back to
+  // the full-width layout so 80-col terminals stay usable.
+  const showSidebar = columns >= SIDEBAR_W + SIDEBAR_GAP + SIDEBAR_MIN_MAIN;
+  const mainW = showSidebar ? columns - SIDEBAR_W - SIDEBAR_GAP : columns;
   const { exit } = useApp();
   const quit = (): void => {
     onExit();
@@ -761,7 +763,10 @@ export function App({
       const s = stateRef.current;
       const todosH = !s.modal && s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
       const lay = layoutRef.current;
-      const inSidebar = e.x > lay.mainW;
+      // Column layout: transcript is [1, mainW], a blank gap sits at mainW+1,
+      // and the sidebar box starts at mainW+2.
+      const inSidebar = e.x > lay.mainW + SIDEBAR_GAP;
+      const inMain = e.x <= lay.mainW;
       // Transcript row index (0-based into lay.visible).
       const lineIdxRaw = e.y - 1 - lay.headerH - todosH;
       const lineIdx = Math.max(0, Math.min(lay.height - 1, lineIdxRaw));
@@ -777,12 +782,13 @@ export function App({
         const r = lay.visible[li];
         return r ? colToCharIndex(r.text, Math.max(0, x - 1)) : 0;
       };
-      // Sidebar text starts after the '│ ' border ('│' at mainW+1, text at mainW+3).
+      // Sidebar text starts after the '│ ' border ('│' at mainW+2, text at
+      // mainW+4 once the gap column is accounted for).
       const colAtSidebar = (li: number, x: number): number =>
-        colToCharIndex(lay.sidebarRows[li]?.text ?? '', Math.max(0, x - lay.mainW - 3));
+        colToCharIndex(lay.sidebarRows[li]?.text ?? '', Math.max(0, x - lay.mainW - 4));
       if (e.type === 'wheel') {
         dragRef.current = null;
-        if (inSidebar || !inTranscript) return;
+        if (!inMain || !inTranscript) return;
         const d = wheelDelta(e.button);
         if (d) {
           dispatch({ type: 'scroll', delta: d });
@@ -798,7 +804,7 @@ export function App({
             col: colAtSidebar(sidebarIdx, e.x),
             moved: false,
           };
-        } else {
+        } else if (inMain) {
           if (!inTranscript) return;
           dispatch({ type: 'setTranscriptFocus', focus: true });
           const r = lay.visible[lineIdx];
@@ -810,6 +816,7 @@ export function App({
               moved: false,
             };
         }
+        // Clicks on the gap column do nothing.
       } else if (e.type === 'drag') {
         if (!dragRef.current || e.button !== 0) return;
         dragRef.current.moved = true;
@@ -969,6 +976,7 @@ export function App({
             })}
           </Box>
         </Box>
+        {showSidebar && <Text> </Text>}
         {showSidebar && (
           <Sidebar
             state={state}
