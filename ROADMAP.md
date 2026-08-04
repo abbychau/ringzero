@@ -145,3 +145,56 @@ token-efficient, zero-dep, CJK-first, UX/operability first.
 
 P4.1 → P4.2 → P4.3 (operability first) → P5.1 → P5.2 → P5.3 → P5.5 → P5.4 →
 P6.1 → P6.2 → P7.1 → P7.2
+
+---
+
+# Phase 3 — Tool call expansion
+
+P5–P7 (TUI/cost/docs polish) are deferred until the functionality set is
+complete, to avoid rework. This phase widens what the agent can do, keeping
+the zero-dep kernel and token-efficiency constraints: short descriptions,
+hard output caps, opt-in config-gated tools.
+
+## T1 — Exploration & navigation
+
+- [x] **T1.1 `list_dir`** — one directory per call: name, dir marker, size,
+      mtime; skips `IGNORE_DIRS`; capped at 200 entries (`src/tools/explore.ts`).
+- [x] **T1.2 `tree`** — project-structure overview with `max_depth` (1–8),
+      capped at 300 lines; ASCII connectors for token efficiency.
+- [x] **T1.3 `grep files_only`** — return matching file paths only (like
+      `grep -l`), pairing with `tree` for cheap orientation.
+- [x] **T1.4 `git_log`** — recent commit history with `path` filter, `-S`
+      pickaxe `search`, `--stat`, and `count` cap (default 20, max 50)
+      (`src/tools/git.ts`).
+- [x] **T1.5 Date injection** — today's date as a separate system block so the
+      model writes correct commit messages/timestamps; Anthropic keeps the
+      static rules cached when the date rolls.
+
+## T2 — Interaction
+
+- [ ] **T2.1 `ask_user`** — agent pauses and asks the user a question mid-run
+      (free text or numbered choices); interactive sessions only (TUI modal /
+      REPL question); one-shot/RPC/sub-agents return `(unavailable)`.
+
+## T3 — Opt-in network tools (config-gated, like `web_search`)
+
+- [ ] **T3.1 `web_search`** — Tavily-compatible search registered only when
+      `RINGZERO_SEARCH_KEY` + `RINGZERO_SEARCH_ENDPOINT` are set.
+- [ ] **T3.2 `http_request`** — generic JSON API calls (GET/POST/PUT/PATCH/
+      DELETE) reusing the SSRF guard; permission `ask` by default.
+
+## T4 — User preferences & persistence
+
+- [ ] **T4.1 `/tools` menu (TUI) + `/tools [name]` (REPL)** — toggle which
+      tools the agent sees; state persisted to `config.json`.
+- [ ] **T4.2 Persistent config** — `~/.ringzero/config.json` (global) merged
+      with `.ringzero/config.json` (project); stores `disabledTools` and
+      `permissionOverrides`.
+- [ ] **T4.3 Permission override persistence** — `/permission` (and the
+      `always`/`never` answers) survive restarts instead of living only in
+      memory.
+
+## Suggested execution order (Phase 3)
+
+T1.1 → T1.2 → T1.3 → T1.4 → T1.5 → T2.1 → T3.1 → T3.2 → T4.1 → T4.2 → T4.3
+→ P5 (after the functional set is complete).

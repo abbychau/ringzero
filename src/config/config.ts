@@ -85,7 +85,12 @@ export function loadConfig(): AppConfig {
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const systemPrompt: string[] = [DEFAULT_SYSTEM];
+  const systemPrompt: string[] = [
+    DEFAULT_SYSTEM,
+    // Date injection (separate block so Anthropic keeps the static rules cached
+    // even as the date rolls; the model uses it for commit messages/date math).
+    `Today: ${new Date().toISOString().slice(0, 10)} (UTC). Use this for commit messages, timestamps, and date math.`,
+  ];
   const systemMd = join(cwd, 'SYSTEM.md');
   if (existsSync(systemMd)) systemPrompt.push(readFileSync(systemMd, 'utf8'));
   for (const dir of ancestorDirs(cwd)) {
@@ -113,6 +118,9 @@ export function loadConfig(): AppConfig {
       grep: 'allow',
       glob: 'allow',
       web_fetch: 'allow',
+      list_dir: 'allow',
+      tree: 'allow',
+      git_log: 'allow',
       write_file: 'ask',
       edit_file: 'ask',
       bash: 'ask',

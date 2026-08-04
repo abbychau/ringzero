@@ -32,6 +32,10 @@ export function grepTool(): Tool {
           pattern: { type: 'string', description: 'regular expression' },
           path: { type: 'string', description: 'directory to search (default cwd)' },
           include: { type: 'string', description: 'glob filter, e.g. *.ts' },
+          files_only: {
+            type: 'boolean',
+            description: 'return only matching file paths (like grep -l)',
+          },
         },
         required: ['pattern'],
       },
@@ -67,6 +71,15 @@ export function grepTool(): Tool {
         }
         if (isBinaryBuf(buf)) continue;
         const lines = buf.toString('utf8').split(/\r?\n/);
+        if (input.files_only === true) {
+          for (let i = 0; i < lines.length; i++) {
+            if (re.test(lines[i]!)) {
+              out.push(f);
+              break;
+            }
+          }
+          continue;
+        }
         for (let i = 0; i < lines.length; i++) {
           if (re.test(lines[i]!)) {
             out.push(`${f}:${i + 1}: ${lines[i]}`);

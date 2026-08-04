@@ -9,6 +9,8 @@ import {
   gitStatus,
   gitDiff,
   gitCommit,
+  gitLog,
+  gitLogTool,
   createCheckpoint,
   restoreCheckpoint,
   latestCheckpoint,
@@ -95,6 +97,41 @@ test('gitCommit reports (nothing to commit) on a clean tree', () => {
   const dir = makeRepo();
   assert.equal(gitCommit(dir, 'nothing'), '(nothing to commit)');
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('gitLog lists recent commits, with path and pickaxe filters', () => {
+  const dir = makeRepo();
+  writeFileSync(join(dir, 'b.txt'), 'hello world\n');
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-qm', 'add b'], { cwd: dir });
+  writeFileSync(join(dir, 'a.txt'), 'one\nchanged\n');
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-qm', 'modify a'], { cwd: dir });
+
+  const log = gitLog(dir);
+  assert.ok(log.includes('modify a'), log);
+  assert.ok(log.includes('add b'), log);
+  assert.ok(log.includes('init'), log);
+
+  const pathLog = gitLog(dir, { path: 'b.txt' });
+  assert.ok(pathLog.includes('add b'), pathLog);
+  assert.ok(!pathLog.includes('modify a'), pathLog);
+
+  const pickaxe = gitLog(dir, { search: 'hello world' });
+  assert.ok(pickaxe.includes('add b'), pickaxe);
+  assert.ok(!pickaxe.includes('modify a'), pickaxe);
+
+  const stat = gitLog(dir, { stat: true, count: 2 });
+  assert.ok(stat.includes('a.txt'), stat);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('gitLog reports (not a git repo) outside a repo', async () => {
+  const plain = mkdtempSync(join(tmpdir(), 'rz-plain-'));
+  assert.equal(gitLog(plain), '(not a git repo)');
+  const toolOut = await gitLogTool().execute({}, { ...ctx, cwd: plain });
+  assert.equal(toolOut, '(not a git repo)');
+  rmSync(plain, { recursive: true, force: true });
 });
 
 test('git tools report (not a git repo) outside a repo', async () => {
