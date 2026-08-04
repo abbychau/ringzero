@@ -140,11 +140,18 @@ export function App({
   const runnerRef = useRef(runner);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const layoutRef = useRef<{ start: number; visible: Row[]; height: number; mainW: number }>({
+  const layoutRef = useRef<{
+    start: number;
+    visible: Row[];
+    height: number;
+    mainW: number;
+    headerH: number;
+  }>({
     start: 0,
     visible: [],
     height: 0,
     mainW: 0,
+    headerH: 1,
   });
   /** Mouse-down position while dragging: { row, col, moved } in layout rows. */
   const dragRef = useRef<{ row: number; col: number; moved: boolean } | null>(null);
@@ -185,7 +192,7 @@ export function App({
     () => windowRows(allRows, transH, state.scroll),
     [allRows, transH, state.scroll],
   );
-  layoutRef.current = { start: win.start, visible: win.visible, height: transH, mainW };
+  layoutRef.current = { start: win.start, visible: win.visible, height: transH, mainW, headerH };
 
   const pushSys = useCallback(
     (text: string) => dispatch({ type: 'push', block: { tag: 'sys', text } }),
@@ -720,12 +727,13 @@ export function App({
     mouseCbRef.current = (e: MouseEventData) => {
       // Clicks/wheel over the sidebar (right of the main pane) do nothing.
       if (e.x > layoutRef.current.mainW) return;
-      // Mouse y is 1-based terminal row; header is row 1, so the transcript
-      // starts at row 2 (1-based) below the optional todo strip.
+      // Mouse y is 1-based terminal row. The first content row (todos or
+      // transcript) sits at terminal row 1+headerH: with the sidebar the header
+      // lives inside it (headerH 0), otherwise it takes row 1 (headerH 1).
       const s = stateRef.current;
-      const todosH = s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
+      const todosH = !s.modal && s.todos.length > 0 ? (s.todosExpanded ? s.todos.length : 1) : 0;
       const lay = layoutRef.current;
-      const lineIdxRaw = e.y - 2 - todosH;
+      const lineIdxRaw = e.y - 1 - lay.headerH - todosH;
       const lineIdx = Math.max(0, Math.min(lay.height - 1, lineIdxRaw));
       const inTranscript = lineIdxRaw >= 0 && lineIdxRaw < lay.height;
       // Terminal column (1-based x) → character index inside the row text,
