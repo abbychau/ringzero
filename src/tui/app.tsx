@@ -19,6 +19,7 @@ import {
   shiftSelect,
   type Modal,
   type Row,
+  type Selection,
   type Usage,
   type AskResponse,
   type Option,
@@ -546,6 +547,25 @@ export function App({
     [closeModal, dispatch],
   );
 
+  // Copy a selection to the OS clipboard (Ctrl+Y, or Ctrl+C while a
+  // selection is active — the standard terminal behavior).
+  const copySelection = (sel: Selection): void => {
+    const rows = sel.pane === 'sidebar' ? layoutRef.current.sidebarRows : allRows;
+    const text = selectionText(rows, sel);
+    if (text) {
+      pushSys('copying selection…');
+      void copyToClipboard(text).then((ok) => {
+        pushSys(
+          ok
+            ? `copied selection · ${text.length.toLocaleString()} chars to clipboard`
+            : '(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)',
+        );
+      });
+    } else {
+      pushSys('(empty selection)');
+    }
+  };
+
   // ---- input key handling ----
   useInput((input, key) => {
     if (input.includes('\x1b')) return; // ignore mouse-relay bytes
@@ -561,23 +581,7 @@ export function App({
     // Copy selection to the clipboard (Ctrl+Y) — works whenever a selection
     // exists, whether or not the transcript has focus.
     if (key.ctrl && input === 'y') {
-      const sel = s.selection;
-      if (sel) {
-        const rows = sel.pane === 'sidebar' ? layoutRef.current.sidebarRows : allRows;
-        const text = selectionText(rows, sel);
-        if (text) {
-          pushSys('copying selection…');
-          void copyToClipboard(text).then((ok) => {
-            pushSys(
-              ok
-                ? `copied selection · ${text.length.toLocaleString()} chars to clipboard`
-                : '(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)',
-            );
-          });
-        } else {
-          pushSys('(empty selection)');
-        }
-      }
+      if (s.selection) copySelection(s.selection);
       return;
     }
 
@@ -666,7 +670,11 @@ export function App({
     if (key.escape) return;
     const c = input.toLowerCase();
     if (key.ctrl && c === 'c') {
-      if (runningRef.current) {
+      // With an active selection Ctrl+C copies it (terminal convention);
+      // otherwise it aborts the run or exits.
+      if (s.selection) {
+        copySelection(s.selection);
+      } else if (runningRef.current) {
         abortRef.current?.abort();
         pushSys('(aborted)');
       } else quit();

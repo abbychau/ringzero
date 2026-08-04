@@ -158,10 +158,11 @@ return to full width.
 `Ctrl+A/E` line start/end ·
 `Ctrl+U` clear line · `Ctrl+W` delete word · `Ctrl+C` abort run / exit.
 **Drag with the mouse to select text** (or `Shift+↑/↓`, `Shift+PgUp/PgDn` after
-clicking the transcript) and press `Ctrl+Y` to copy the selection to the system
-clipboard; `Esc` clears the selection. Selection works in both the transcript
-and the sidebar. Mouse-driven selection is CJK-safe: a click on a wide
-character selects the whole character.
+clicking the transcript) and press `Ctrl+C` or `Ctrl+Y` to copy the selection
+to the system clipboard (with a selection active, `Ctrl+C` copies instead of
+aborting/exiting); `Esc` clears the selection. Selection works in both the
+transcript and the sidebar. Mouse-driven selection is CJK-safe: a click on a
+wide character selects the whole character.
 While the agent is running, **typing + Enter injects your message mid-run**
 (the current stream aborts and the run continues with your input).
 Permission prompts appear as an inline modal: `y` yes · `n` no · `a` always · `v` never.
