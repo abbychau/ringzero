@@ -775,7 +775,9 @@ export function App({
         dragRef.current = null;
         if (!anchor) return;
         if (!anchor.moved) {
-          // Plain click (no drag): toggle tool output at the anchor row.
+          // Plain click (no drag): drop any active selection and toggle tool
+          // output at the anchor row.
+          dispatch({ type: 'setSelection', selection: undefined });
           const r = lay.visible[anchor.row - lay.start];
           if (r) {
             const b = s.blocks[r.blockIdx];
