@@ -277,10 +277,14 @@ export function Sidebar({
             {' │'}
           </Text>
         ) : (
-          <Text key={i} color={r.color} dimColor={r.dim} bold={r.bold}>
+          // Borders stay in the box's dim style; only the content inherits the
+          // row's color/weight so the frame reads as one continuous box.
+          <Text key={i} dimColor>
             {'│ '}
-            {inner}
-            {' '.repeat(padW)}
+            <Text color={r.color} dimColor={r.dim} bold={r.bold}>
+              {inner}
+              {' '.repeat(padW)}
+            </Text>
             {' │'}
           </Text>
         );
