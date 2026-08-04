@@ -35,12 +35,15 @@ import { PermissionGate, type AskResponse } from '../permission/gate.js';
 import { compactHistory, estimateContextTokens } from '../kernel/context.js';
 import type { Provider, SessionMessage, Tool } from '../kernel/types.js';
 import { createTodoTool, type TodoItem } from '../tools/todo.js';
+import { askUserTool } from '../tools/ask.js';
 
 export interface RunnerOptions {
   sessionId?: string;
   model?: string;
   /** Interactive ask handler. Defaults to deny (safe for scripts). */
   ask?: (prompt: string) => Promise<AskResponse>;
+  /** Free-text prompt for ask_user (interactive sessions). */
+  promptUser?: (prompt: string) => Promise<string | null>;
   /** Start in plan mode (read-only until the user approves a plan). */
   planMode?: boolean;
 }
@@ -65,6 +68,7 @@ export class Runner {
   private pluginToolHooks: ((i: ToolBeforeInput) => Promise<ToolBeforeResult | void>)[] = [];
   private pluginToolAfterHooks: ((i: ToolAfterInput) => Promise<ToolAfterResult | void>)[] = [];
   private skillTools = new Map<string, Tool[]>();
+  private promptUserFn?: (prompt: string) => Promise<string | null>;
   /** Set by the UI to receive plugin say() output. */
   pluginSay?: (text: string) => void;
 
@@ -77,6 +81,7 @@ export class Runner {
     this.history = this.sessionId ? this.store.load(this.sessionId) : [];
     if (this.sessionId) this.loadTodos(this.sessionId);
     this.model = opts.model ?? config.env.model;
+    this.promptUserFn = opts.promptUser;
     this.planMode =
       opts.planMode ??
       (process.env.RINGZERO_PLAN_MODE === '1' || process.env.RINGZERO_PLAN_MODE === 'true');
@@ -124,6 +129,7 @@ export class Runner {
     const provider = this.makeProvider();
     const tools = [
       ...defaultTools(),
+      askUserTool(),
       createTodoTool(this.todos, () => this.saveTodos()),
       createTaskTool({
         provider,
@@ -162,6 +168,7 @@ export class Runner {
       maxSteps: this.config.maxSteps,
       planMode: this.planMode,
       signal,
+      promptUser: this.promptUserFn,
       onBeforeTool: async (name, args) => {
         if (!checkpointed && this.sessionId) {
           checkpointed = true;

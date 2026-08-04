@@ -22,6 +22,7 @@ test('App mounts and renders the header', () => {
     <App
       runner={runner}
       askRef={{}}
+      promptUserRef={{}}
       favorites={[]}
       initialModel="test-model"
       sysRef={{}}
@@ -101,6 +102,7 @@ test('App shows / command suggestions while typing a slash', async () => {
     <App
       runner={runner}
       askRef={{}}
+      promptUserRef={{}}
       favorites={[]}
       initialModel="test-model"
       sysRef={{}}

@@ -74,6 +74,8 @@ export interface AgentOptions {
   onEvent?: (e: AgentEvent) => void;
   /** Map an external abort signal into the loop. */
   signal?: AbortSignal;
+  /** Free-text question channel for ask_user (interactive sessions only). */
+  promptUser?: (prompt: string) => Promise<string | null>;
   /** Called for every message created by this run (used for persistence). */
   onMessage?: (m: SessionMessage) => void;
   /** Called after auto-compaction replaces the history (used to persist the result). */
@@ -212,6 +214,7 @@ export class Agent {
       home,
       workspace: this.opts.workspace,
       signal: this.opts.signal ?? new AbortController().signal,
+      promptUser: this.opts.promptUser,
       ask: async (p) => {
         const r = await this.opts.permission.check('__ask__', p);
         return r.allowed;

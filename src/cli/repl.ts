@@ -42,6 +42,10 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
       notifyPermission(p);
       return ask(p);
     },
+    promptUser: (p) => {
+      notifyPermission(p);
+      return new Promise<string | null>((res) => rl.question(`${p}\n> `, (a) => res(a)));
+    },
   });
   runner.pluginSay = (t) => console.log(t);
   let lastUsage: TokenUsage | undefined;

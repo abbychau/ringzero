@@ -48,6 +48,7 @@ import {
 interface AppProps {
   runner: Runner;
   askRef: { current?: (p: string) => Promise<AskResponse> };
+  promptUserRef: { current?: (p: string) => Promise<string | null> };
   favorites: string[];
   initialModel: string;
   sysRef: { current?: (text: string) => void };
@@ -65,6 +66,7 @@ function wordStart(s: string, cursor: number): number {
 export function App({
   runner,
   askRef,
+  promptUserRef,
   favorites,
   initialModel,
   sysRef,
@@ -198,6 +200,15 @@ export function App({
       ),
     [],
   );
+
+  // ask_user tool: reuse the input modal, with a desktop notification while
+  // the prompt waits (same as permission prompts).
+  useEffect(() => {
+    promptUserRef.current = (prompt: string) => {
+      notifyPermission(prompt);
+      return openInputModal(prompt);
+    };
+  }, [promptUserRef, openInputModal]);
 
   const openSelect = useCallback(
     (title: string, options: Option[]): Promise<string | null> =>
@@ -687,12 +698,14 @@ export async function runTui(config: AppConfig, model?: string, resume?: string)
   };
   mark('start');
   const askRef: { current?: (p: string) => Promise<AskResponse> } = {};
+  const promptUserRef: { current?: (p: string) => Promise<string | null> } = {};
   const sysRef: { current?: (text: string) => void } = {};
   const mouseCbRef: { current?: (e: MouseEventData) => void } = {};
   const runner = new Runner(config, {
     model,
     sessionId: resume,
     ask: (p) => askRef.current!(p),
+    promptUser: (p) => promptUserRef.current!(p),
   });
   await runner.init();
   runner.pluginSay = (t) => sysRef.current?.(t);
@@ -720,6 +733,7 @@ export async function runTui(config: AppConfig, model?: string, resume?: string)
     <App
       runner={runner}
       askRef={askRef}
+      promptUserRef={promptUserRef}
       favorites={config.favoriteModels}
       initialModel={runner.model}
       sysRef={sysRef}

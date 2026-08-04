@@ -51,6 +51,8 @@ export interface ToolContext {
   signal: AbortSignal;
   /** Ask the user to confirm a sensitive action. */
   ask(prompt: string): Promise<boolean>;
+  /** Free-text question (ask_user tool). Undefined in non-interactive modes. */
+  promptUser?(prompt: string): Promise<string | null>;
 }
 
 /** A concrete tool implementation. */
