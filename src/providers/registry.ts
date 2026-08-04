@@ -18,6 +18,7 @@ export function createDefaultProvider(env: Env): Provider {
       apiKey: env.anthropicApiKey,
       model: env.anthropicModel ?? 'claude-sonnet-4-5',
       cacheControl: true,
+      effort: env.effort,
       retries: Number(process.env.RINGZERO_RETRIES) || 2,
     });
   }
@@ -26,6 +27,7 @@ export function createDefaultProvider(env: Env): Provider {
       id: 'gemini',
       apiKey: env.geminiApiKey,
       model: env.model,
+      effort: env.effort,
       retries: Number(process.env.RINGZERO_RETRIES) || 2,
     });
   }
@@ -34,6 +36,7 @@ export function createDefaultProvider(env: Env): Provider {
     baseURL: env.apiUrl,
     apiKey: env.apiKey,
     model: env.model,
+    effort: env.effort,
     retries: Number(process.env.RINGZERO_RETRIES) || 2,
   });
 }

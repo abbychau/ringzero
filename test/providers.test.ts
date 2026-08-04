@@ -4,6 +4,7 @@ import { createOpenAICompatProvider, toOpenAIMessages } from '../src/providers/o
 import { createAnthropicProvider, toAnthropicMessages } from '../src/providers/anthropic.js';
 import { createGeminiProvider, toGeminiMessages } from '../src/providers/gemini.js';
 import { createDefaultProvider } from '../src/providers/registry.js';
+import { effortLevel } from '../src/providers/effort.js';
 import type { ChatEvent, ProviderMessage } from '../src/kernel/types.js';
 
 /** Stub global fetch with a canned SSE body; returns a restore function. */
@@ -18,6 +19,32 @@ function stubFetch(sse: string): () => void {
   globalThis.fetch = async () => new Response(body, { status: 200 });
   return () => {
     globalThis.fetch = orig;
+  };
+}
+
+/** Stub fetch, capturing each request body as parsed JSON (fresh SSE per call). */
+function stubFetchCapture(sse = 'data: [DONE]\n\n'): {
+  restore: () => void;
+  bodies: Record<string, unknown>[];
+} {
+  const orig = globalThis.fetch;
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.body) bodies.push(JSON.parse(String(init.body)) as Record<string, unknown>);
+    void input;
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(sse));
+        c.close();
+      },
+    });
+    return new Response(body, { status: 200 });
+  };
+  return {
+    restore: () => {
+      globalThis.fetch = orig;
+    },
+    bodies,
   };
 }
 
@@ -231,4 +258,98 @@ test('openai-compat and anthropic embed images as multimodal content', () => {
       source: { type: 'base64', media_type: 'image/png', data: 'QUJD' },
     },
   ]);
+});
+
+test('effortLevel accepts known levels and rejects the rest', () => {
+  assert.equal(effortLevel('low'), 'low');
+  assert.equal(effortLevel('medium'), 'medium');
+  assert.equal(effortLevel('high'), 'high');
+  assert.equal(effortLevel('ultra'), undefined);
+  assert.equal(effortLevel(''), undefined);
+  assert.equal(effortLevel(undefined), undefined);
+});
+
+test('openai-compat sends reasoning_effort when effort is set, omits it otherwise', async () => {
+  const { restore, bodies } = stubFetchCapture();
+  try {
+    const withEffort = createOpenAICompatProvider({
+      id: 'test',
+      baseURL: 'http://example.com/v1',
+      apiKey: 'k',
+      model: 'm',
+      effort: 'high',
+    });
+    for await (const _ev of withEffort.chat({ messages: [] })) {
+      /* drain */
+    }
+    assert.equal(bodies[0]?.reasoning_effort, 'high');
+    const without = createOpenAICompatProvider({
+      id: 'test',
+      baseURL: 'http://example.com/v1',
+      apiKey: 'k',
+      model: 'm',
+    });
+    for await (const _ev of without.chat({ messages: [] })) {
+      /* drain */
+    }
+    assert.equal('reasoning_effort' in (bodies[1] ?? {}), false);
+  } finally {
+    restore();
+  }
+});
+
+test('anthropic maps effort to a thinking budget', async () => {
+  const { restore, bodies } = stubFetchCapture();
+  try {
+    const provider = createAnthropicProvider({
+      id: 'test',
+      apiKey: 'k',
+      model: 'm',
+      effort: 'medium',
+    });
+    for await (const _ev of provider.chat({ messages: [] })) {
+      /* drain */
+    }
+    assert.deepEqual(bodies[0]?.thinking, { type: 'enabled', budget_tokens: 8192 });
+  } finally {
+    restore();
+  }
+});
+
+test('gemini maps effort to thinkingConfig', async () => {
+  const { restore, bodies } = stubFetchCapture();
+  try {
+    const provider = createGeminiProvider({
+      id: 'test',
+      apiKey: 'k',
+      model: 'gemini-2.5-flash',
+      effort: 'low',
+    });
+    for await (const _ev of provider.chat({ messages: [] })) {
+      /* drain */
+    }
+    const gc = (bodies[0]?.generationConfig ?? {}) as Record<string, unknown>;
+    assert.deepEqual(gc.thinkingConfig, { thinkingBudget: 2048 });
+  } finally {
+    restore();
+  }
+});
+
+test('registry passes effort through to the provider', async () => {
+  const { restore, bodies } = stubFetchCapture();
+  try {
+    const p = createDefaultProvider({
+      apiUrl: 'http://example.com/v1',
+      apiKey: 'k',
+      model: 'm',
+      effort: 'low',
+    });
+    assert.equal(p.id, 'openai-compat');
+    for await (const _ev of p.chat({ messages: [] })) {
+      /* drain */
+    }
+    assert.equal(bodies[0]?.reasoning_effort, 'low');
+  } finally {
+    restore();
+  }
 });

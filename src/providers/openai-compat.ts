@@ -9,12 +9,15 @@ import type {
 import { countTokens } from '../kernel/tokenizer.js';
 import { fetchWithRetry } from './retry.js';
 import { log } from '../util/log.js';
+import type { EffortLevel } from './effort.js';
 
 export interface OpenAICompatConfig {
   id: string;
   baseURL: string;
   apiKey: string;
   model: string;
+  /** Reasoning effort sent as `reasoning_effort` (low/medium/high). */
+  effort?: EffortLevel;
   /** Override the HTTP error message for auth failures (surfaced to user). */
   headers?: Record<string, string>;
   /** Transient-failure retries (429/5xx/network). Default 2. */
@@ -115,6 +118,7 @@ export function createOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
       }
       if (req.maxTokens) body.max_tokens = req.maxTokens;
       if (req.temperature !== undefined) body.temperature = req.temperature;
+      if (cfg.effort) body.reasoning_effort = cfg.effort;
 
       const res = await fetchWithRetry(
         `${baseURL}/chat/completions`,

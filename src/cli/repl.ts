@@ -4,7 +4,7 @@ import { Runner } from './runner.js';
 import { createDefaultProvider } from '../providers/registry.js';
 import type { AskResponse } from '../permission/gate.js';
 import type { TokenUsage, ImageInput } from '../kernel/types.js';
-import type { Agent } from '../kernel/agent.js';
+import { CONTINUE_PROMPT, type Agent } from '../kernel/agent.js';
 import { estimateCost, fmtCost } from '../kernel/cost.js';
 import { notifyPermission, notifyRunComplete } from './notify.js';
 
@@ -57,6 +57,43 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
   const title = 'ringzero session';
   await runner.init();
 
+  // Run one prompt turn and return why the agent loop ended.
+  const runPrompt = async (line: string): Promise<'done' | 'max_steps'> => {
+    runner.ensureSession(title);
+    const agent = runner.agent();
+    runningAgent = agent;
+    let usage: TokenUsage | undefined;
+    let reason: 'done' | 'max_steps' = 'done';
+    const t0 = performance.now();
+    try {
+      for await (const ev of agent.run(line, {
+        images: imageState.current ? [imageState.current] : undefined,
+      })) {
+        if (ev.type === 'text') process.stdout.write(ev.text);
+        else if (ev.type === 'tool_start') process.stdout.write(`\n⛏ ${ev.name}\n`);
+        else if (ev.type === 'permission' && !ev.allowed)
+          process.stdout.write(`[denied: ${ev.name}]\n`);
+        else if (ev.type === 'compacting') process.stdout.write('\n[compacting context…]\n');
+        else if (ev.type === 'injected') process.stdout.write(`\n[✂ injected: ${ev.text}]\n`);
+        else if (ev.type === 'finish') {
+          usage = ev.usage;
+          reason = ev.reason;
+        }
+      }
+    } catch (err) {
+      process.stdout.write(`\n[error: ${err instanceof Error ? err.message : String(err)}]\n`);
+    }
+    runningAgent = null;
+    imageState.current = undefined;
+    lastUsage = usage;
+    if (usage)
+      process.stdout.write(
+        `\n[usage ${fmtUsage(usage)} ≈${fmtCost(estimateCost(runner.model, usage))}]\n`,
+      );
+    notifyRunComplete(Math.round((performance.now() - t0) / 1000));
+    return reason;
+  };
+
   console.log(
     `RingZero — model=${runner.model} provider=${createDefaultProvider({ ...config.env, model: runner.model }).id} — /help for commands`,
   );
@@ -92,34 +129,17 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
       rl.prompt();
       return;
     }
-    runner.ensureSession(title);
-    const agent = runner.agent();
-    runningAgent = agent;
-    let usage: TokenUsage | undefined;
-    const t0 = performance.now();
-    try {
-      for await (const ev of agent.run(line, {
-        images: imageState.current ? [imageState.current] : undefined,
-      })) {
-        if (ev.type === 'text') process.stdout.write(ev.text);
-        else if (ev.type === 'tool_start') process.stdout.write(`\n⛏ ${ev.name}\n`);
-        else if (ev.type === 'permission' && !ev.allowed)
-          process.stdout.write(`[denied: ${ev.name}]\n`);
-        else if (ev.type === 'compacting') process.stdout.write('\n[compacting context…]\n');
-        else if (ev.type === 'injected') process.stdout.write(`\n[✂ injected: ${ev.text}]\n`);
-        else if (ev.type === 'finish') usage = ev.usage;
-      }
-    } catch (err) {
-      process.stdout.write(`\n[error: ${err instanceof Error ? err.message : String(err)}]\n`);
-    }
-    runningAgent = null;
-    imageState.current = undefined;
-    lastUsage = usage;
-    if (usage)
-      process.stdout.write(
-        `\n[usage ${fmtUsage(usage)} ≈${fmtCost(estimateCost(runner.model, usage))}]\n`,
+    let reason = await runPrompt(line);
+    // Step cap hit: ask to continue instead of silently dropping the task.
+    while (reason === 'max_steps') {
+      const cont = await new Promise<boolean>((res) =>
+        rl.question('已達步數上限,要繼續嗎? [y/N] > ', (a) =>
+          res(a.trim().toLowerCase().startsWith('y')),
+        ),
       );
-    notifyRunComplete(Math.round((performance.now() - t0) / 1000));
+      if (!cont) break;
+      reason = await runPrompt(CONTINUE_PROMPT);
+    }
     rl.prompt();
   });
 

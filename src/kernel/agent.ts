@@ -47,6 +47,12 @@ const CACHEABLE_TOOLS = new Set([
 
 export const PLAN_BLOCK_TEXT = 'plan mode: present a plan with the plan tool first';
 
+/**
+ * Injected as a user turn when the step cap was hit and the user chose to
+ * continue (TUI/REPL prompt). Keeps the transcript honest about why it's there.
+ */
+export const CONTINUE_PROMPT = '(已達步數上限,用戶選擇繼續。請完成未竟的工作)';
+
 /** Sentinel for the stream-step race: an interrupt won over the model event. */
 const INTERRUPT = { interrupt: true as const };
 
@@ -58,7 +64,7 @@ export type AgentEvent =
   | { type: 'permission'; name: string; allowed: boolean }
   | { type: 'compacting' }
   | { type: 'injected'; text: string }
-  | { type: 'finish'; usage?: TokenUsage; steps: number };
+  | { type: 'finish'; usage?: TokenUsage; steps: number; reason: 'done' | 'max_steps' };
 
 export interface AgentOptions {
   provider: Provider;
@@ -255,6 +261,9 @@ export class Agent {
     let steps = 0;
     // maxSteps < 0 (MAX_STEPS=-1) disables the step cap entirely.
     const stepCap = this.opts.maxSteps < 0 ? Number.POSITIVE_INFINITY : this.opts.maxSteps;
+    // A natural loop exit (steps >= stepCap) means the cap was hit; only the
+    // calls.length === 0 break means the model finished on its own.
+    let reason: 'done' | 'max_steps' = 'max_steps';
 
     while (steps < stepCap) {
       // Mid-run injection: process queued user messages before the next model call.
@@ -371,7 +380,10 @@ export class Agent {
       });
 
       if (interrupted) continue; // next iteration drains the injected messages
-      if (calls.length === 0) break;
+      if (calls.length === 0) {
+        reason = 'done';
+        break;
+      }
 
       // Phase 1 (sequential): resolve + authorize each call. Permission checks may
       // ask the user, so they run one at a time. Unknown/blocked/denied calls are
@@ -556,7 +568,7 @@ export class Agent {
       steps++;
     }
 
-    yield emit({ type: 'finish', usage, steps });
+    yield emit({ type: 'finish', usage, steps, reason });
   }
 
   private orderedToolDefs(): ToolDefinition[] {

@@ -111,7 +111,9 @@ test('agent completes a task requiring one tool call', async () => {
   const res = events.find((e) => e.type === 'tool_result') as
     Extract<AgentEvent, { type: 'tool_result' }> | undefined;
   assert.equal(res?.output, '5');
-  assert.equal(events[events.length - 1]!.type, 'finish');
+  const finish = events[events.length - 1] as Extract<AgentEvent, { type: 'finish' }>;
+  assert.equal(finish.type, 'finish');
+  assert.equal(finish.reason, 'done');
 });
 
 test('agent chains two tool calls, feeding the previous result into the next', async () => {
@@ -179,6 +181,7 @@ test('runaway tool loop stops at maxSteps', async () => {
   const { events } = await run(agent, 'loop forever');
   const finish = events[events.length - 1] as Extract<AgentEvent, { type: 'finish' }>;
   assert.equal(finish.type, 'finish');
+  assert.equal(finish.reason, 'max_steps');
   assert.equal(finish.steps, 3);
   assert.equal(events.filter((e) => e.type === 'tool_result').length, 3);
 });
@@ -193,6 +196,7 @@ test('maxSteps -1 removes the step cap', async () => {
   const { events, finalText } = await run(agent, 'loop');
   const finish = events[events.length - 1] as Extract<AgentEvent, { type: 'finish' }>;
   assert.equal(finish.steps, 5);
+  assert.equal(finish.reason, 'done');
   assert.equal(finalText, 'done');
 });
 

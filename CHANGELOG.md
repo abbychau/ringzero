@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- `EFFORT` env (alias `RINGZERO_EFFORT`): reasoning effort
+  `low`/`medium`/`high` — OpenAI-compat sends `reasoning_effort`, Anthropic
+  and Gemini enable thinking with a mapped token budget
+  (`src/providers/effort.ts`, `src/providers/*`, `src/config/env.ts`).
 - Compaction 2.0: structured summary brief (goals / decisions / files /
   errors / unfinished), tool-call args excluded from the summarize request,
   incremental folding passes until the budget fits
@@ -77,6 +81,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `MAX_STEPS` env: short name for `RINGZERO_MAX_STEPS` (handy in `.env`),
   with `-1` = unlimited agent-loop steps
   (`src/config/config.ts`, `src/kernel/agent.ts`, `src/cli/doctor.ts`).
+- Step-limit handoff: the `finish` event now carries
+  `reason: 'done' | 'max_steps'`; when the cap is hit, the TUI asks
+  (confirm modal) and the REPL asks (`y/N`) whether to continue, then starts
+  a continuation turn with the full history still in context
+  (`src/kernel/agent.ts`, `src/tui/app.tsx`, `src/cli/repl.ts`).
 - Workspace sandbox auto-detect: with `RINGZERO_WORKSPACE` unset, fs tools are
   locked to the git work-tree root (`detectGitRoot`, `src/config/config.ts`);
   `off`/`none` disables the sandbox.

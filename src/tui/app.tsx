@@ -4,7 +4,7 @@ import { appendFileSync } from 'node:fs';
 import process from 'node:process';
 import type { AppConfig } from '../config/config.js';
 import { Runner } from '../cli/runner.js';
-import type { Agent } from '../kernel/agent.js';
+import { CONTINUE_PROMPT, type Agent } from '../kernel/agent.js';
 import type { ImageInput } from '../kernel/types.js';
 import {
   reducer,
@@ -135,6 +135,10 @@ export function App({
     };
   }, [askRef]);
 
+  const runTurnRef = useRef<(prompt: string, images?: ImageInput[]) => Promise<void>>(
+    async () => {},
+  );
+
   const runTurn = useCallback(
     async (prompt: string, images?: ImageInput[]) => {
       const t0 = performance.now();
@@ -146,6 +150,8 @@ export function App({
       agentRef.current = agent;
       let usage: Usage | undefined;
       let status = 'idle';
+      let finishReason: 'done' | 'max_steps' = 'done';
+      let hitSteps = 0;
       try {
         for await (const ev of agent.run(prompt, { images })) {
           if (ev.type === 'text') dispatch({ type: 'appendAssistant', delta: ev.text });
@@ -162,7 +168,11 @@ export function App({
           } else if (ev.type === 'permission' && !ev.allowed)
             pushSys(`permission denied: ${ev.name}`);
           else if (ev.type === 'compacting') pushSys('compacting context…');
-          else if (ev.type === 'finish') usage = ev.usage;
+          else if (ev.type === 'finish') {
+            usage = ev.usage;
+            finishReason = ev.reason;
+            hitSteps = ev.steps;
+          }
         }
         if (abort.signal.aborted) status = 'aborted';
       } catch (e) {
@@ -187,9 +197,19 @@ export function App({
           : status;
       dispatch({ type: 'runEnd', usage, status: finalStatus, ctx });
       notifyRunComplete(Math.round((performance.now() - t0) / 1000));
+      // Step cap hit and the run wasn't aborted: ask whether to keep going.
+      // If yes, start a continuation turn with the full history still in context.
+      if (finishReason === 'max_steps' && !abort.signal.aborted) {
+        const answer = await askRef.current?.(`已達步數上限 (${hitSteps}),要繼續嗎?`);
+        if (answer === 'yes') await runTurnRef.current?.(CONTINUE_PROMPT);
+      }
     },
     [pushSys],
   );
+
+  useEffect(() => {
+    runTurnRef.current = runTurn;
+  }, [runTurn]);
 
   const closeModal = useCallback(() => dispatch({ type: 'setModal', modal: undefined }), []);
 

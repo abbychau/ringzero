@@ -43,7 +43,7 @@ export async function runOneShot(
       process.stdout.write('\n[compacting context…]\n');
     } else if (ev.type === 'finish') {
       process.stdout.write(
-        `\n[finish steps=${ev.steps} usage=${JSON.stringify(ev.usage)} session=${sessionId}]\n`,
+        `\n[finish steps=${ev.steps} reason=${ev.reason} usage=${JSON.stringify(ev.usage)} session=${sessionId}]\n`,
       );
     }
   }

@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { effortLevel, type EffortLevel } from '../providers/effort.js';
 
 /**
  * Environment config. Loads .env from cwd (then user home) without overriding
@@ -13,6 +14,8 @@ export interface Env {
   anthropicApiKey?: string;
   anthropicModel?: string;
   geminiApiKey?: string;
+  /** Reasoning effort (EFFORT / RINGZERO_EFFORT): low/medium/high. */
+  effort?: EffortLevel;
 }
 
 export function loadDotEnv(dir: string): void {
@@ -41,5 +44,7 @@ export function loadEnv(cwd = process.cwd()): Env {
     anthropicApiKey: process.env.ANTHROPIC_API_KEY,
     anthropicModel: process.env.ANTHROPIC_MODEL,
     geminiApiKey: process.env.GEMINI_API_KEY,
+    // EFFORT (short, handy in .env) wins over RINGZERO_EFFORT.
+    effort: effortLevel(process.env.EFFORT ?? process.env.RINGZERO_EFFORT),
   };
 }

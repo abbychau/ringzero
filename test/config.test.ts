@@ -85,3 +85,27 @@ test('MAX_STEPS=-1 means unlimited steps', () => {
     }),
   );
 });
+
+test('EFFORT maps to env.effort, short name wins over RINGZERO_EFFORT', () => {
+  return withEnv('EFFORT', 'high', () =>
+    withEnv('RINGZERO_EFFORT', 'low', () => {
+      assert.equal(loadConfig().env.effort, 'high');
+    }),
+  );
+});
+
+test('EFFORT empty string disables effort even when RINGZERO_EFFORT is set', () => {
+  return withEnv('EFFORT', '', () =>
+    withEnv('RINGZERO_EFFORT', 'low', () => {
+      // `??` semantics: an empty short name shadows the long alias (same as
+      // CONTEXT_BUDGET / RINGZERO_CONTEXT_BUDGET).
+      assert.equal(loadConfig().env.effort, undefined);
+    }),
+  );
+});
+
+test('unknown EFFORT values are ignored', () => {
+  return withEnv('EFFORT', 'ultra', () => {
+    assert.equal(loadConfig().env.effort, undefined);
+  });
+});

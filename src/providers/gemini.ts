@@ -9,12 +9,15 @@ import type {
 import { countTokens } from '../kernel/tokenizer.js';
 import { fetchWithRetry } from './retry.js';
 import { log } from '../util/log.js';
+import { effortBudgetTokens, type EffortLevel } from './effort.js';
 
 export interface GeminiConfig {
   id: string;
   apiKey: string;
   model: string;
   baseURL?: string;
+  /** Reasoning effort: sets `thinkingConfig` with a mapped token budget. */
+  effort?: EffortLevel;
   /** Transient-failure retries (429/5xx/network). Default 2. */
   retries?: number;
 }
@@ -104,6 +107,8 @@ export function createGeminiProvider(cfg: GeminiConfig): Provider {
         maxOutputTokens: req.maxTokens ?? 8192,
       };
       if (req.temperature !== undefined) generationConfig.temperature = req.temperature;
+      const budget = effortBudgetTokens(cfg.effort);
+      if (budget !== undefined) generationConfig.thinkingConfig = { thinkingBudget: budget };
       const body: Record<string, unknown> = {
         contents: toGeminiMessages(req.messages),
         generationConfig,

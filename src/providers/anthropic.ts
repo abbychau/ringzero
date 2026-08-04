@@ -10,12 +10,15 @@ import { countTokens } from '../kernel/tokenizer.js';
 import { consumeSSE } from './streaming.js';
 import { fetchWithRetry } from './retry.js';
 import { log } from '../util/log.js';
+import { effortBudgetTokens, type EffortLevel } from './effort.js';
 
 export interface AnthropicConfig {
   id: string;
   apiKey: string;
   model: string;
   baseURL?: string;
+  /** Reasoning effort: enables `thinking` with a mapped token budget. */
+  effort?: EffortLevel;
   /** Inject cache_control breakpoints (Anthropic prompt caching). */
   cacheControl?: boolean;
   /** Transient-failure retries (429/5xx/network). Default 2. */
@@ -131,6 +134,8 @@ export function createAnthropicProvider(cfg: AnthropicConfig): Provider {
         }));
       }
       if (req.temperature !== undefined) body.temperature = req.temperature;
+      const budget = effortBudgetTokens(cfg.effort);
+      if (budget !== undefined) body.thinking = { type: 'enabled', budget_tokens: budget };
 
       const res = await fetchWithRetry(
         `${baseURL}/messages`,
