@@ -66,6 +66,8 @@ export interface State {
   model: string;
   /** Plan mode banner + gating (read-only until plan approved). */
   planMode: boolean;
+  /** Yolo mode: all tools auto-allowed, no permission prompts. */
+  yolo: boolean;
   /** Per-session todo list (from Runner). */
   todos: TodoItem[];
   /** Collapsed strip (1 line) vs full list. */
@@ -91,13 +93,14 @@ export type Action =
   | { type: 'setModal'; modal?: Modal }
   | { type: 'setModel'; model: string }
   | { type: 'setPlanMode'; planMode: boolean }
+  | { type: 'setYolo'; yolo: boolean }
   | { type: 'setTodos'; todos: TodoItem[] }
   | { type: 'toggleTodos' }
   | { type: 'setImage'; image?: ImageInput }
   | { type: 'history'; index: number }
   | { type: 'clear' };
 
-export function initial(model: string, planMode = false): State {
+export function initial(model: string, planMode = false, yolo = false): State {
   return {
     blocks: [],
     input: '',
@@ -111,6 +114,7 @@ export function initial(model: string, planMode = false): State {
     transcriptFocus: false,
     model,
     planMode,
+    yolo,
     todos: [],
     todosExpanded: false,
   };
@@ -206,6 +210,8 @@ export function reducer(s: State, a: Action): State {
       return { ...s, model: a.model };
     case 'setPlanMode':
       return { ...s, planMode: a.planMode };
+    case 'setYolo':
+      return { ...s, yolo: a.yolo };
     case 'setTodos':
       return { ...s, todos: a.todos };
     case 'toggleTodos':
@@ -309,6 +315,7 @@ export function slashCommands(): string[] {
     'plan',
     'todos',
     'tools',
+    'yolo',
     'image',
     'export',
     'exit',

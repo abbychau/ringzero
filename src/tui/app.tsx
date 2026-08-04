@@ -73,7 +73,10 @@ export function App({
   mouseCbRef,
   onExit,
 }: AppProps): React.JSX.Element {
-  const [state, dispatch] = useReducer(reducer, initial(initialModel, runner.isPlanMode()));
+  const [state, dispatch] = useReducer(
+    reducer,
+    initial(initialModel, runner.isPlanMode(), runner.yolo),
+  );
   const { rows: termRows, columns } = useWindowSize();
   const { exit } = useApp();
   const quit = (): void => {
@@ -139,6 +142,10 @@ export function App({
     async () => {},
   );
 
+  // Yolo auto-continue counter: capped so a runaway loop can't burn tokens
+  // forever; reset whenever the user submits a fresh prompt (submit handler).
+  const autoContRef = useRef(0);
+
   const runTurn = useCallback(
     async (prompt: string, images?: ImageInput[]) => {
       const t0 = performance.now();
@@ -197,11 +204,20 @@ export function App({
           : status;
       dispatch({ type: 'runEnd', usage, status: finalStatus, ctx });
       notifyRunComplete(Math.round((performance.now() - t0) / 1000));
-      // Step cap hit and the run wasn't aborted: ask whether to keep going.
-      // If yes, start a continuation turn with the full history still in context.
+      // Step cap hit and the run wasn't aborted: yolo auto-continues (bounded);
+      // otherwise ask whether to keep going. Continuation turns reuse the full
+      // history still in context.
       if (finishReason === 'max_steps' && !abort.signal.aborted) {
-        const answer = await askRef.current?.(`已達步數上限 (${hitSteps}),要繼續嗎?`);
-        if (answer === 'yes') await runTurnRef.current?.(CONTINUE_PROMPT);
+        if (runnerRef.current.yolo && autoContRef.current < 3) {
+          autoContRef.current++;
+          pushSys(`yolo mode — auto-continuing (${autoContRef.current}/3)`);
+          await runTurnRef.current?.(CONTINUE_PROMPT);
+        } else if (runnerRef.current.yolo) {
+          pushSys('yolo mode — step cap hit repeatedly, stopping (use /yolo off to review)');
+        } else {
+          const answer = await askRef.current?.(`已達步數上限 (${hitSteps}),要繼續嗎?`);
+          if (answer === 'yes') await runTurnRef.current?.(CONTINUE_PROMPT);
+        }
       }
     },
     [pushSys],
@@ -281,6 +297,7 @@ export function App({
       dispatch({ type: 'push', block: { tag: 'user', text: line } });
       const pending = stateRef.current.pendingImage;
       if (pending) dispatch({ type: 'setImage' });
+      autoContRef.current = 0;
       void runTurn(line, pending ? [pending] : undefined);
     },
     [runCommand, runTurn, pushSys],
@@ -296,6 +313,7 @@ export function App({
       { label: '/permission', run: () => void runCommand('/permission') },
       { label: '/skills', run: () => void runCommand('/skills') },
       { label: '/plan', hint: 'toggle plan mode', run: () => void runCommand('/plan') },
+      { label: '/yolo', hint: 'auto-allow all tools', run: () => void runCommand('/yolo') },
       { label: '/todos', hint: 'toggle todo list', run: () => void runCommand('/todos') },
       { label: '/new', hint: 'start new session', run: () => void runCommand('/new') },
       { label: '/exit', run: () => quit() },
@@ -705,7 +723,12 @@ export function App({
 }
 
 /** Entry point: build the Runner, filter mouse bytes from Ink's stdin, and render. */
-export async function runTui(config: AppConfig, model?: string, resume?: string): Promise<void> {
+export async function runTui(
+  config: AppConfig,
+  model?: string,
+  resume?: string,
+  yolo = false,
+): Promise<void> {
   const DBG = process.env.RINGZERO_TUI_DEBUG;
   const mark = (m: string): void => {
     if (DBG) {
@@ -724,6 +747,7 @@ export async function runTui(config: AppConfig, model?: string, resume?: string)
   const runner = new Runner(config, {
     model,
     sessionId: resume,
+    yolo,
     ask: (p) => askRef.current!(p),
     promptUser: (p) => promptUserRef.current!(p),
   });

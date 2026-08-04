@@ -40,6 +40,11 @@ test('StatusBar renders idle status', () => {
   assert.ok(lastFrame()!.includes('ready'));
 });
 
+test('StatusBar shows the YOLO badge when yolo is on', () => {
+  const { lastFrame } = render(<StatusBar state={initial('m', false, true)} />);
+  assert.ok(stripAnsi(lastFrame()!).includes('YOLO'));
+});
+
 test('StatusBar shows session total usage + cached', () => {
   const { lastFrame } = render(
     <StatusBar state={initial('m')} session={{ input: 4313, output: 360, cacheRead: 3072 }} />,

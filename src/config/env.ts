@@ -16,6 +16,8 @@ export interface Env {
   geminiApiKey?: string;
   /** Reasoning effort (EFFORT / RINGZERO_EFFORT): low/medium/high. */
   effort?: EffortLevel;
+  /** Yolo mode (YOLO / RINGZERO_YOLO): auto-allow every permission check. */
+  yolo?: boolean;
 }
 
 export function loadDotEnv(dir: string): void {
@@ -34,6 +36,12 @@ export function loadDotEnv(dir: string): void {
   }
 }
 
+/** Truthy env flag: '1' / 'true' / 'yes' / 'on' → true, anything else → false. */
+export function envBool(v: string | undefined): boolean | undefined {
+  if (v === undefined || v === '') return undefined;
+  return ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
+}
+
 export function loadEnv(cwd = process.cwd()): Env {
   loadDotEnv(cwd);
   loadDotEnv(homedir());
@@ -46,5 +54,7 @@ export function loadEnv(cwd = process.cwd()): Env {
     geminiApiKey: process.env.GEMINI_API_KEY,
     // EFFORT (short, handy in .env) wins over RINGZERO_EFFORT.
     effort: effortLevel(process.env.EFFORT ?? process.env.RINGZERO_EFFORT),
+    // YOLO (short) wins over RINGZERO_YOLO; empty string shadows the alias.
+    yolo: envBool(process.env.YOLO ?? process.env.RINGZERO_YOLO),
   };
 }

@@ -83,6 +83,8 @@ export function doctorReport(config: AppConfig): DoctorFinding[] {
       `context budget ${config.contextBudget.toLocaleString()} · max steps ${
         config.maxSteps < 0 ? 'unlimited' : config.maxSteps
       }` +
+      ` · effort ${config.env.effort ?? 'off'}` +
+      ` · yolo ${config.env.yolo ? 'ON (auto-allow all tools)' : 'off'}` +
       ` · verify ${config.verifyCommand ? 'on' : 'off'}` +
       ` · favorite models: ${config.favoriteModels.join(', ') || '(none)'}`,
   });

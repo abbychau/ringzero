@@ -916,6 +916,45 @@ test('plan mode: a rejected plan keeps blocking mutating tools', async () => {
   );
 });
 
+test('yolo mode: plan mode is bypassed, deny rules are overridden, no asks', async () => {
+  let writes = 0;
+  const write = makeTool('write', () => {
+    writes++;
+    return 'written';
+  });
+  let asked = 0;
+  const yoloGate = new PermissionGate({
+    rules: { write: 'deny' },
+    ask: async () => {
+      asked++;
+      return 'no';
+    },
+  });
+  yoloGate.setYolo(true);
+  const provider = scriptedProvider((msgs) => {
+    if (!lastTool(msgs)) return { calls: [{ name: 'write', args: {} }] };
+    return { text: `done: ${lastTool(msgs)?.content}` };
+  });
+  const agent = new Agent({
+    provider,
+    tools: [write],
+    permission: yoloGate,
+    planMode: true, // yolo wins over plan mode
+  });
+  const { events, finalText } = await run(agent, 'write now');
+  assert.equal(finalText, 'done: written');
+  assert.equal(writes, 1);
+  assert.equal(asked, 0, 'yolo never prompts');
+  const perms = events.filter(
+    (e): e is Extract<AgentEvent, { type: 'permission' }> => e.type === 'permission',
+  );
+  assert.deepEqual(
+    perms.map((p) => p.allowed),
+    [true],
+    'permission event reports allowed in yolo mode',
+  );
+});
+
 test('tool cache: identical pure tool calls are deduped within a run', async () => {
   let calls = 0;
   const read = makeTool('read_file', () => {

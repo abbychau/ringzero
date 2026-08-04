@@ -6,6 +6,7 @@ import { notifyRunComplete } from './notify.js';
 export interface OneShotOptions {
   resume?: string;
   yes?: boolean;
+  yolo?: boolean;
   model?: string;
   json?: boolean;
   images?: ImageInput[];
@@ -20,6 +21,7 @@ export async function runOneShot(
   const runner = new Runner(config, {
     sessionId: opts.resume,
     model: opts.model,
+    yolo: opts.yolo,
     ask: opts.yes ? async () => 'yes' as const : async () => 'no' as const,
   });
   runner.ensureSession(prompt.slice(0, 40));

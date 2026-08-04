@@ -15,10 +15,11 @@ import { IGNORE_DIRS } from '../tools/fsutil.js';
 export async function runWatch(
   config: AppConfig,
   prompt: string,
-  opts: { model?: string; yes?: boolean } = {},
+  opts: { model?: string; yes?: boolean; yolo?: boolean } = {},
 ): Promise<void> {
   const runner = new Runner(config, {
     model: opts.model,
+    yolo: opts.yolo,
     ask: opts.yes ? async () => 'yes' as const : async () => 'no' as const,
   });
   runner.pluginSay = (t) => console.log(t);

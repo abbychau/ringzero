@@ -21,8 +21,15 @@ import { Runner } from './runner.js';
  * Notifications (emitted when `notify` is set on prompt):
  *   prompt/event {type, ...event}     → streamed agent events
  */
-export async function runRpc(config: AppConfig, opts: { model?: string } = {}): Promise<void> {
-  const runner = new Runner(config, { model: opts.model, ask: async () => 'no' as const });
+export async function runRpc(
+  config: AppConfig,
+  opts: { model?: string; yolo?: boolean } = {},
+): Promise<void> {
+  const runner = new Runner(config, {
+    model: opts.model,
+    yolo: opts.yolo,
+    ask: async () => 'no' as const,
+  });
   await runner.init();
   runner.pluginSay = (t) => console.error(`[plugin] ${t}`);
 

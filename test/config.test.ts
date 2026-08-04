@@ -109,3 +109,40 @@ test('unknown EFFORT values are ignored', () => {
     assert.equal(loadConfig().env.effort, undefined);
   });
 });
+
+test('YOLO truthy values enable yolo, falsy/unknown disable it', () => {
+  return withEnv('YOLO', '1', () =>
+    withEnv('RINGZERO_YOLO', '', () => {
+      assert.equal(loadConfig().env.yolo, true);
+    }),
+  )
+    .then(() =>
+      withEnv('YOLO', 'true', () =>
+        withEnv('RINGZERO_YOLO', '', () => {
+          assert.equal(loadConfig().env.yolo, true);
+        }),
+      ),
+    )
+    .then(() =>
+      withEnv('YOLO', '0', () =>
+        withEnv('RINGZERO_YOLO', '', () => {
+          assert.equal(loadConfig().env.yolo, false);
+        }),
+      ),
+    )
+    .then(() =>
+      withEnv('YOLO', 'banana', () =>
+        withEnv('RINGZERO_YOLO', '', () => {
+          assert.equal(loadConfig().env.yolo, false);
+        }),
+      ),
+    );
+});
+
+test('YOLO empty string shadows RINGZERO_YOLO (like EFFORT)', () => {
+  return withEnv('YOLO', '', () =>
+    withEnv('RINGZERO_YOLO', '1', () => {
+      assert.equal(loadConfig().env.yolo, undefined);
+    }),
+  );
+});

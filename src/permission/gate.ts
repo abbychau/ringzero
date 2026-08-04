@@ -17,11 +17,24 @@ export class PermissionGate {
   private overrides = new Map<string, PermissionRule>();
   private readonly askFn: (p: string) => Promise<AskResponse>;
   private readonly onOverride?: (toolName: string, rule: PermissionRule) => void;
+  private yoloOn = false;
 
   constructor(opts: PermissionGateOptions) {
     this.rules = { ...opts.rules };
     this.askFn = opts.ask;
     this.onOverride = opts.onOverride;
+  }
+
+  /**
+   * Yolo mode: every check auto-allows — no prompts, no ask, even for `deny`
+   * rules and the `__ask__` channel (plan approval). Toggleable at runtime.
+   */
+  setYolo(on: boolean): void {
+    this.yoloOn = on;
+  }
+
+  get yolo(): boolean {
+    return this.yoloOn;
   }
 
   /** Set a persistent per-tool override (e.g. from /permission allow bash). */
@@ -47,6 +60,7 @@ export class PermissionGate {
     toolName: string,
     detail: string,
   ): Promise<{ allowed: boolean; rule: PermissionRule }> {
+    if (this.yoloOn) return { allowed: true, rule: 'allow' };
     const rule = this.ruleFor(toolName);
     if (rule === 'allow') return { allowed: true, rule };
     if (rule === 'deny') return { allowed: false, rule };

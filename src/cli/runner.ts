@@ -49,6 +49,8 @@ export interface RunnerOptions {
   promptUser?: (prompt: string) => Promise<string | null>;
   /** Start in plan mode (read-only until the user approves a plan). */
   planMode?: boolean;
+  /** Yolo mode: auto-allow every permission check (CLI wins over env, then prefs). */
+  yolo?: boolean;
 }
 
 /** Wires config + store + tools + provider into a runnable Agent, per session. */
@@ -105,6 +107,8 @@ export class Runner {
     for (const [name, rule] of Object.entries(prefs.permissionOverrides)) {
       this.gate.setOverride(name, rule);
     }
+    // Yolo mode: CLI --yolo > env YOLO > persisted prefs (/yolo toggle).
+    this.gate.setYolo(opts.yolo ?? config.env.yolo ?? prefs.yolo);
     // Housekeeping: archive old/excess sessions (env-tunable, off by default
     // except for the 50-session cap). Never archives the session being resumed.
     this.store.prune({
@@ -263,12 +267,24 @@ export class Runner {
     return true;
   }
 
-  /** Persist disabled tools + permission overrides to the global config.json. */
+  /** Persist disabled tools + permission overrides + yolo to config.json. */
   private savePrefs(): void {
     savePrefs(this.prefsPaths, {
       disabledTools: this.disabledTools,
       permissionOverrides: this.gate.listOverrides(),
+      yolo: this.gate.yolo,
     });
+  }
+
+  /** Yolo mode: every permission check auto-allows. */
+  get yolo(): boolean {
+    return this.gate.yolo;
+  }
+
+  /** Toggle yolo mode; persisted to the global config.json. */
+  setYolo(on: boolean): void {
+    this.gate.setYolo(on);
+    this.savePrefs();
   }
 
   listSkills(): SkillInfo[] {

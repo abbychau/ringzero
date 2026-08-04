@@ -17,6 +17,8 @@ Usage:
   ringzero --rpc                JSON-RPC mode over stdin/stdout (SDK)
   ringzero --model <id> "..."   override model
   ringzero --yes "..."          auto-allow all tools (scripted mode)
+  ringzero --yolo "..."         yolo mode: never prompt, all tools auto-allowed
+                                (also YOLO=1 in .env, or /yolo in TUI/REPL)
   ringzero --image <path> "..." attach an image to the prompt (repeatable)
   ringzero --version            print version
   ringzero --doctor             environment self-check (exit 1 on problems)
@@ -31,6 +33,8 @@ Env (.env or environment):
   RINGZERO_CONTEXT_BUDGET          context budget for compaction (default 32000)
   RINGZERO_PRESERVE_RECENT         tail tokens kept verbatim across compaction
   RINGZERO_WORKSPACE               fs sandbox root (default: git root; "off" disables)
+  YOLO                             yolo mode: auto-allow all tools, no prompts
+  RINGZERO_YOLO                    long alias for YOLO
 `;
 
 function printHelp(): void {
@@ -40,6 +44,7 @@ function printHelp(): void {
 const args = process.argv.slice(2);
 let json = false;
 let yes = false;
+let yolo = false;
 let resume: string | undefined;
 let model: string | undefined;
 let listSessions = false;
@@ -56,6 +61,7 @@ for (let i = 0; i < args.length; i++) {
   const a = args[i]!;
   if (a === '--json') json = true;
   else if (a === '--yes' || a === '-y') yes = true;
+  else if (a === '--yolo' || a === '-Y') yolo = true;
   else if (a === '--resume' || a === '-c') resume = args[++i];
   else if (a === '--model') model = args[++i];
   else if (a === '--sessions') listSessions = true;
@@ -123,18 +129,18 @@ try {
   if (prompt) {
     if (watch) {
       const { runWatch } = await import('./watch.js');
-      await runWatch(config, prompt, { model, yes });
+      await runWatch(config, prompt, { model, yes, yolo });
     } else {
-      await runOneShot(config, prompt, { resume, yes, model, json, images });
+      await runOneShot(config, prompt, { resume, yes, yolo, model, json, images });
     }
   } else if (rpc) {
     const { runRpc } = await import('./rpc.js');
-    await runRpc(config, { model });
+    await runRpc(config, { model, yolo });
   } else if (tui && process.stdin.isTTY && process.stdout.isTTY) {
     const { runTui } = await import('../tui/app.js');
-    await runTui(config, model, resume);
+    await runTui(config, model, resume, yolo);
   } else {
-    await runRepl(config, model, resume);
+    await runRepl(config, model, resume, yolo);
   }
 } catch (e) {
   console.error(`\n[error] ${e instanceof Error ? e.message : String(e)}`);

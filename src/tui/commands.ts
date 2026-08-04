@@ -30,7 +30,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   switch (cmd) {
     case 'help':
       pushSys(
-        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
+        'commands: /help /usage /context /model [id] /compact /permission <tool> <allow|ask|deny> /yolo [on|off] /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline',
       );
       break;
     case 'usage': {
@@ -89,6 +89,20 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
         pushSys('usage: /permission <tool> <allow|ask|deny>');
       }
       break;
+    case 'yolo': {
+      const on = rest[0] === undefined ? !r.yolo : rest[0] === 'on';
+      if (rest[0] !== undefined && rest[0] !== 'on' && rest[0] !== 'off') {
+        pushSys('usage: /yolo [on|off]');
+        break;
+      }
+      r.setYolo(on);
+      deps.dispatch({ type: 'setYolo', yolo: on });
+      pushSys(
+        `yolo mode ${on ? 'ON — all tools auto-allowed, no permission prompts' : 'OFF'}` +
+          (on ? ' (use /yolo off to restore prompts)' : ''),
+      );
+      break;
+    }
     case 'skills': {
       if (rest[0]) {
         if (rest[0] === 'off' && rest[1]) {

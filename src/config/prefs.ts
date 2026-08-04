@@ -6,6 +6,8 @@ import type { PermissionRule } from '../permission/gate.js';
 export interface Prefs {
   disabledTools: Set<string>;
   permissionOverrides: Record<string, PermissionRule>;
+  /** Yolo mode (auto-allow all tools), toggled via /yolo. */
+  yolo: boolean;
 }
 
 export interface PrefsPaths {
@@ -20,6 +22,7 @@ export const VALID_RULES: PermissionRule[] = ['ask', 'allow', 'deny'];
 interface RawPrefs {
   disabledTools?: unknown;
   permissionOverrides?: unknown;
+  yolo?: unknown;
 }
 
 /**
@@ -31,6 +34,8 @@ interface RawPrefs {
 export function loadPrefs(paths: PrefsPaths): Prefs {
   const disabledTools = new Set<string>();
   const permissionOverrides: Record<string, PermissionRule> = {};
+  // Project file wins for yolo (read global first, then project overwrites).
+  let yolo = false;
   for (const p of [paths.global, paths.project]) {
     const data = readPrefsFile(p);
     if (!data) continue;
@@ -48,8 +53,9 @@ export function loadPrefs(paths: PrefsPaths): Prefs {
         }
       }
     }
+    if (typeof data.yolo === 'boolean') yolo = data.yolo;
   }
-  return { disabledTools, permissionOverrides };
+  return { disabledTools, permissionOverrides, yolo };
 }
 
 function readPrefsFile(path: string): RawPrefs | null {
@@ -70,6 +76,7 @@ export function savePrefs(paths: PrefsPaths, prefs: Prefs): void {
       {
         disabledTools: [...prefs.disabledTools].sort(),
         permissionOverrides: prefs.permissionOverrides,
+        yolo: prefs.yolo,
       },
       null,
       2,

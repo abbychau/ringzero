@@ -54,6 +54,10 @@ test('reducer plan mode + todos', () => {
   assert.equal(s.planMode, true);
   s = reducer(s, { type: 'setPlanMode', planMode: false });
   assert.equal(s.planMode, false);
+  s = reducer(s, { type: 'setYolo', yolo: true });
+  assert.equal(s.yolo, true);
+  s = reducer(s, { type: 'setYolo', yolo: false });
+  assert.equal(s.yolo, false);
   s = reducer(s, {
     type: 'setTodos',
     todos: [
@@ -67,6 +71,11 @@ test('reducer plan mode + todos', () => {
   assert.equal(s.todosExpanded, true);
   s = reducer(s, { type: 'toggleTodos' });
   assert.equal(s.todosExpanded, false);
+});
+
+test('initial state carries yolo (default off)', () => {
+  assert.equal(initial('m').yolo, false);
+  assert.equal(initial('m', false, true).yolo, true);
 });
 
 test('layoutBlocks wraps and collapses tool preview', () => {
@@ -171,6 +180,7 @@ test('slashMatches filters commands by prefix (and a lone slash shows all)', () 
   // plan/todos/tools are registered for autocomplete
   assert.deepEqual(slashMatches('/p'), ['permission', 'plan']);
   assert.deepEqual(slashMatches('/t'), ['todos', 'tools']);
+  assert.ok(slashMatches('/').includes('yolo'));
   // plugin extras are merged and deduped against built-ins
   assert.ok(slashMatches('/', ['mcp-list']).includes('mcp-list'));
   assert.deepEqual(slashMatches('/m', ['mcp-list']), ['model', 'mcp-list']);

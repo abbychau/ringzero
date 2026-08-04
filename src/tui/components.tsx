@@ -57,10 +57,14 @@ export function StatusBar({
   const ses = session
     ? `  · ${fmtSession(session)} ≈${fmtCost(estimateCost(state.model, session))}`
     : '';
+  // Yolo badge is a separate colored element; status text truncates tighter to
+  // leave room for it.
+  const statusText = truncateWidth(state.status + sc + focus + ctx + ses, 92);
   return (
     <Box>
       {state.running ? <Spinner /> : <Text dimColor>●</Text>}
-      <Text dimColor> {truncateWidth(state.status + sc + focus + ctx + ses, 100)}</Text>
+      {state.yolo ? <Text color="red"> YOLO</Text> : null}
+      <Text dimColor> {statusText}</Text>
     </Box>
   );
 }

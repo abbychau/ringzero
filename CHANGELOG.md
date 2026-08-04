@@ -7,6 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Yolo mode: `/yolo` (TUI/REPL), `YOLO=1` env (alias `RINGZERO_YOLO`), or
+  `--yolo` flag — every permission check auto-allows, no prompts, overrides
+  `deny` rules and plan mode; step-cap continuation auto-runs (capped at 3
+  per turn). Persists to `config.json`; status bar shows a `YOLO` badge
+  (`src/permission/gate.ts`, `src/cli/runner.ts`, `src/tui/*`, `src/cli/*`).
 - `EFFORT` env (alias `RINGZERO_EFFORT`): reasoning effort
   `low`/`medium`/`high` — OpenAI-compat sends `reasoning_effort`, Anthropic
   and Gemini enable thinking with a mapped token budget

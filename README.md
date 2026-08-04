@@ -63,6 +63,10 @@ disclosure (skills), and ephemeral sub-agents.
 - **Notifications** — terminal bell + desktop bubble when a long run finishes or a permission prompt waits (`RINGZERO_NOTIFY`, `RINGZERO_NOTIFY_MIN`).
 - **Watch mode** — `--watch "prompt"` re-runs the prompt whenever the project changes (auto-fix loops).
 - **Permission gate** — allow / ask / deny per tool, per-session overrides.
+- **Yolo mode** — `/yolo` (TUI/REPL), `YOLO=1` env, or `--yolo` flag:
+  auto-allow every tool with zero prompts (overrides plan mode and `deny`
+  rules; the step-cap continuation also auto-runs, capped at 3 per turn).
+  Persists to `config.json` like `/permission` overrides.
 - **Token/cost dashboard** — per-turn + session input/output/cache breakdown
   with cache hit rate and an estimated cost from a built-in zero-dep price
   table (StatusBar, `/usage`, per-turn status); tune `src/kernel/cost.ts`.
@@ -151,7 +155,7 @@ Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 
 ### Slash commands (REPL & TUI)
 
-`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
+`/help  /usage  /model [id]  /compact  /permission <tool> <allow|ask|deny>  /yolo [on|off]  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
 
 `/image <path>` attaches an image to your next message (shown as `[img]` in the
 header); `/image clear` removes it. `/export [path]` writes the current session
@@ -164,6 +168,16 @@ re-enables all. Disabled tools are hidden from the agent until re-enabled.
 `/usage` shows the session token totals with cache hit rate and estimated cost
 (per-turn breakdown too); the StatusBar keeps a live cost estimate for the
 session, and each finished turn reports its own usage.
+
+### Yolo mode
+
+`/yolo` (or `YOLO=1` in `.env`, or `ringzero --yolo`): every permission
+check auto-allows — no modals, no `[denied]` events, `deny` rules and plan
+mode are overridden. Useful for unattended/trusted tasks. The status bar
+shows a red `YOLO` badge while it's on; `/yolo off` restores prompts. The
+toggle persists to `config.json` (precedence: CLI `--yolo` > `YOLO` env >
+persisted toggle). When the step cap is hit, yolo auto-continues up to 3
+times per user turn instead of prompting.
 
 ### Plan mode
 
@@ -180,8 +194,9 @@ persist to `~/.ringzero/config.json` (global). A project-level
 `.ringzero/config.json` merges on top and wins per key — handy for
 repo-specific defaults (`.ringzero/` is gitignored by default). Disabled tools
 are a union across both files: a repo can disable more, but only the global
-file can re-enable. The config file is JSON with `disabledTools` (array) and
-`permissionOverrides` (tool → `allow|ask|deny`).
+file can re-enable. The config file is JSON with `disabledTools` (array),
+`permissionOverrides` (tool → `allow|ask|deny`), and `yolo` (boolean,
+project file wins).
 
 ### Checkpoints & rollback
 
@@ -256,6 +271,8 @@ echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}'
 | `GEMINI_API_KEY` / `GEMINI_MODEL`       | —                 | used when `API_URL` is empty (after Anthropic); `MODEL` wins over `GEMINI_MODEL`                                                                                  |
 | `EFFORT`                                | —                 | short alias for `RINGZERO_EFFORT` (handy in `.env`): `low` / `medium` / `high`                                                                                    |
 | `RINGZERO_EFFORT`                       | —                 | reasoning effort. OpenAI-compat sends `reasoning_effort`; Anthropic/Gemini enable thinking with a budget (low 2048 / medium 8192 / high 16384 tokens)             |
+| `YOLO`                                  | `0`               | yolo mode: auto-allow every tool, no permission prompts (`1`/`true`/`yes`/`on`). CLI `--yolo` wins, then this, then the persisted `/yolo` toggle                  |
+| `RINGZERO_YOLO`                         | `0`               | long alias for `YOLO`                                                                                                                                             |
 | `CONTEXT_BUDGET`                        | —                 | short alias for `RINGZERO_CONTEXT_BUDGET` (handy in `.env`)                                                                                                       |
 | `RINGZERO_CONTEXT_BUDGET`               | 32000             | compaction trigger (estimated tokens)                                                                                                                             |
 | `RINGZERO_PRESERVE_RECENT`              | 8000              | tail tokens kept verbatim on compaction                                                                                                                           |

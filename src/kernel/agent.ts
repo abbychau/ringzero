@@ -438,8 +438,10 @@ export class Agent {
         }
         // Plan mode: only read-only tools + the plan tool run until the user
         // approves. Non-read-only calls are blocked with a hint to plan first.
+        // Yolo mode bypasses plan mode entirely (no prompts, no gates).
         if (
           this.opts.planMode &&
+          !this.opts.permission.yolo &&
           !this.planApproved &&
           call.name !== 'plan' &&
           !READ_ONLY_TOOLS.has(call.name)

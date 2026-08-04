@@ -28,7 +28,12 @@ function fmtUsage(u?: TokenUsage): string {
   }`;
 }
 
-export async function runRepl(config: AppConfig, model?: string, resume?: string): Promise<void> {
+export async function runRepl(
+  config: AppConfig,
+  model?: string,
+  resume?: string,
+  yolo = false,
+): Promise<void> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -38,6 +43,7 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
   const runner = new Runner(config, {
     model,
     sessionId: resume,
+    yolo,
     ask: (p) => {
       notifyPermission(p);
       return ask(p);
@@ -130,14 +136,19 @@ export async function runRepl(config: AppConfig, model?: string, resume?: string
       return;
     }
     let reason = await runPrompt(line);
-    // Step cap hit: ask to continue instead of silently dropping the task.
-    while (reason === 'max_steps') {
-      const cont = await new Promise<boolean>((res) =>
-        rl.question('已達步數上限,要繼續嗎? [y/N] > ', (a) =>
-          res(a.trim().toLowerCase().startsWith('y')),
-        ),
-      );
-      if (!cont) break;
+    // Step cap hit: yolo auto-continues (bounded), otherwise ask the user.
+    let cont = 0;
+    while (reason === 'max_steps' && cont < 3) {
+      cont++;
+      const go = runner.yolo
+        ? true
+        : await new Promise<boolean>((res) =>
+            rl.question('已達步數上限,要繼續嗎? [y/N] > ', (a) =>
+              res(a.trim().toLowerCase().startsWith('y')),
+            ),
+          );
+      if (!go) break;
+      if (runner.yolo) console.log(`(yolo mode — auto-continuing ${cont}/3)`);
       reason = await runPrompt(CONTINUE_PROMPT);
     }
     rl.prompt();
@@ -158,7 +169,7 @@ async function handleSlash(
   switch (cmd) {
     case 'help':
       console.log(
-        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools [name|reset]  /image <path>  /new  /exit',
+        'commands: /help  /usage  /model <id>  /compact  /permission <tool> <allow|ask|deny>  /yolo [on|off]  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools [name|reset]  /image <path>  /new  /exit',
       );
       break;
     case 'usage': {
@@ -195,6 +206,16 @@ async function handleSlash(
       } else {
         console.log('usage: /permission <tool> <allow|ask|deny>');
       }
+      break;
+    }
+    case 'yolo': {
+      const on = rest[0] === undefined ? !runner.yolo : rest[0] === 'on';
+      if (rest[0] !== undefined && rest[0] !== 'on' && rest[0] !== 'off') {
+        console.log('usage: /yolo [on|off]');
+        break;
+      }
+      runner.setYolo(on);
+      console.log(`yolo mode ${on ? 'ON — all tools auto-allowed, no prompts' : 'OFF'}`);
       break;
     }
     case 'tools': {
