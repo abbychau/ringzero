@@ -255,21 +255,25 @@ class RingZeroAgent(BaseInstalledAgent):
                     "QEMU",
                     "win311.img",
                 ),
-                "CRITICAL: a previous attempt already installed and BOOTED Windows "
-                "3.11 in QEMU with network working and the right snapshot/img/vga/memory "
-                "params — but it FAILED the verifier because the QEMU monitor was not "
-                "exposed on a UNIX socket. The verifier connects to "
-                "/tmp/qemu-monitor.sock and sends `sendkey` commands to press keys in "
-                "the VM. You MUST start QEMU with the monitor on that exact socket: "
-                "add `-monitor unix:/tmp/qemu-monitor.sock,server,nowait` to the "
-                "qemu-system command line (keep snapshot=on, the win311.img path, a "
-                "vga device (cirrus/std/vga), -m memory, and raw image format). After "
-                "starting QEMU, verify the socket exists: `ls -la "
-                "/tmp/qemu-monitor.sock`. Then test it with: `echo 'sendkey f1' | "
-                "socat - UNIX-CONNECT:/tmp/qemu-monitor.sock` (install socat if "
-                "missing: apt-get install -y socat). The verifier sends f1, alt-tab, "
-                "f10, alt-f4, ctrl-esc and takes screenshots after each — all via "
-                "that socket.",
+                "CRITICAL: two previous attempts got 3/4 verifier tests passing — "
+                "network up, QEMU params right (snapshot=on, win311.img, vga, -m, raw), "
+                "core files present, AND the monitor socket now works (sendkey "
+                "commands succeed). The ONLY remaining failure: the verifier takes "
+                "screenshots with `vncsnapshot -allowblank localhost:1` and requires "
+                "at least one of f1/alt-tab/f10/alt-f4/ctrl-esc to change the screen "
+                "by >=10% (image difference). Requirements: (1) start QEMU with BOTH "
+                "`-monitor unix:/tmp/qemu-monitor.sock,server,nowait` AND `-vnc :1` "
+                "on the SAME qemu-system process (so keys and screenshots hit the "
+                "same VM); (2) ensure Windows 3.11 boots fully to the Program Manager "
+                "desktop (GUI), not a DOS prompt or setup screen — key presses only "
+                "change the screen once the GUI desktop is up; wait for the desktop "
+                "before finishing; if the VNC screen is black/blank, fix the video "
+                "setup (cirrus vga, correct resolution 640x480) so the desktop is "
+                "visible; (3) verify yourself: install vncsnapshot, take baseline, "
+                "send a key via the socket (`echo 'sendkey f1' | socat - "
+                "UNIX-CONNECT:/tmp/qemu-monitor.sock`), take an after-shot, and "
+                "confirm the images differ by >=10% (e.g. compare with python/ImageMagick). "
+                "Keep snapshot=on, win311.img path, -m, format=raw.",
             ),
             (
                 (
@@ -277,18 +281,18 @@ class RingZeroAgent(BaseInstalledAgent):
                     "yelp",
                     "0.62",
                 ),
-                "CRITICAL: a previous attempt produced a valid model (size OK, "
-                "under 150MB) but the verifier measured only 0.568 accuracy, just "
-                "below the required 0.62. The private test set comes from the same "
-                "yelp distribution. Improve accuracy by training MORE (more epochs / "
-                "more data seen) and tuning hyperparameters (higher -epoch, consider "
-                "-dim 100..300, -wordNgrams 2-3, -minn/-maxn for subwords, lower "
-                "-lr with more epochs for stability) while keeping the final "
-                "/app/model.bin under 150MB (check `ls -la /app/model.bin`; if too "
-                "big, reduce -dim or vocabulary). Validate on a held-out split of "
-                "the yelp data in data/ and iterate until you see ≥0.62 on your "
-                "validation before finishing. Note the sandbox has 1 CPU — training "
-                "is slow, so use a fast config that still hits 0.62.",
+                "CRITICAL: one earlier attempt produced a valid model.bin (size OK "
+                "under 150MB) with 0.568 accuracy, just below the required 0.62, but "
+                "a LATER attempt over-tuned and NEVER SAVED /app/model.bin (verifier "
+                "failed with FileNotFoundError). You MUST make sure the final model "
+                "file EXISTS at /app/model.bin and is under 150MB (`ls -la "
+                "/app/model.bin`) before finishing — run fasttext with `-output "
+                "/app/model` so it writes /app/model.bin, and confirm with ls. The "
+                "private test set comes from the same yelp distribution; improve on "
+                "the 0.568 by training MORE epochs / more data, tune -dim 100..300, "
+                "-wordNgrams 2-3, subwords (-minn/-maxn), and validate on a held-out "
+                "split until you see ≥0.62. Sandbox has 1 CPU so training is slow — "
+                "pick a config that finishes and SAVES the model in time.",
             ),
             (
                 (

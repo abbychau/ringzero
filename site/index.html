@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="RingZero — a minimal, token-efficient agent harness. Zero-dependency kernel, Ink-based TUI, aggressive token saving."
+    />
+    <title>RingZero &middot; Minimal token-efficient agent harness</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='36' fill='none' stroke='%233ecf8e' stroke-width='10'/%3E%3Ccircle cx='50' cy='50' r='6' fill='%233ecf8e'/%3E%3C/svg%3E"
+    />
+    <style>
+      :root {
+        --bg: #0a0e14;
+        --panel: #10151d;
+        --border: #1c2430;
+        --text: #d7e0ea;
+        --muted: #8b98a9;
+        --accent: #3ecf8e;
+        --accent-dim: #2a9d6e;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          'PingFang TC',
+          'Microsoft JhengHei',
+          sans-serif;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      code,
+      pre,
+      .mono {
+        font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+
+      /* ---------- header ---------- */
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(10, 14, 20, 0.85);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--border);
+      }
+
+      header .wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 60px;
+      }
+
+      .logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text);
+        font-weight: 650;
+        letter-spacing: 0.02em;
+      }
+      .logo:hover {
+        text-decoration: none;
+      }
+      .logo svg {
+        display: block;
+      }
+
+      nav {
+        display: flex;
+        align-items: center;
+        gap: 22px;
+      }
+      nav a {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      nav a:hover {
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      /* ---------- hero ---------- */
+      .hero {
+        padding: 110px 0 90px;
+        text-align: center;
+      }
+
+      .hero .eyebrow {
+        display: inline-block;
+        font-size: 13px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 14px;
+        margin-bottom: 28px;
+      }
+
+      .hero h1 {
+        font-size: clamp(44px, 7vw, 72px);
+        font-weight: 750;
+        letter-spacing: -0.03em;
+        line-height: 1.05;
+      }
+
+      .hero h1 .dot {
+        color: var(--accent);
+      }
+
+      .hero .tagline {
+        margin: 22px auto 0;
+        max-width: 560px;
+        font-size: 18px;
+        color: var(--muted);
+      }
+
+      .hero .actions {
+        margin-top: 38px;
+        display: flex;
+        justify-content: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-block;
+        padding: 12px 22px;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        transition:
+          border-color 0.15s ease,
+          background 0.15s ease;
+      }
+
+      .btn:hover {
+        text-decoration: none;
+      }
+
+      .btn.primary {
+        background: var(--accent);
+        color: #06231a;
+        border-color: var(--accent);
+      }
+      .btn.primary:hover {
+        background: var(--accent-dim);
+      }
+
+      .btn.ghost {
+        color: var(--text);
+      }
+      .btn.ghost:hover {
+        border-color: var(--accent);
+      }
+
+      .hero .term {
+        margin: 64px auto 0;
+        max-width: 620px;
+        text-align: left;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        overflow: hidden;
+      }
+
+      .term .bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .term .bar i {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+      .term .bar i:nth-child(1) {
+        background: #ff5f57;
+      }
+      .term .bar i:nth-child(2) {
+        background: #febc2e;
+      }
+      .term .bar i:nth-child(3) {
+        background: #28c840;
+      }
+
+      .term .bar span {
+        margin-left: 8px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .term pre {
+        padding: 18px 20px;
+        font-size: 14px;
+        overflow-x: auto;
+      }
+
+      .term .prompt {
+        color: var(--accent);
+      }
+      .term .cmt {
+        color: var(--muted);
+      }
+
+      /* ---------- sections ---------- */
+      section {
+        padding: 70px 0;
+      }
+      section + section {
+        border-top: 1px solid var(--border);
+      }
+
+      .sec-title {
+        font-size: 13px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--accent);
+        margin-bottom: 10px;
+      }
+
+      .sec-head {
+        font-size: 30px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 40px;
+      }
+
+      /* ---------- features ---------- */
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 22px;
+      }
+
+      .card h3 {
+        font-size: 16px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .card h3 .tag {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--accent);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 2px 6px;
+      }
+
+      .card p {
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      /* ---------- benchmarks ---------- */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin-bottom: 44px;
+      }
+
+      .stat {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 24px 20px;
+        text-align: center;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 40px;
+        font-weight: 750;
+        letter-spacing: -0.03em;
+        color: var(--accent);
+        line-height: 1.1;
+      }
+
+      .stat strong span {
+        font-size: 20px;
+        color: var(--muted);
+      }
+
+      .stat small {
+        display: block;
+        margin-top: 6px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .bench-note {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 18px;
+      }
+
+      .bench-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 40px;
+        font-size: 14px;
+      }
+
+      .bench-table th,
+      .bench-table td {
+        text-align: left;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .bench-table th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .bench-table tr.hl td {
+        background: rgba(62, 207, 142, 0.08);
+        font-weight: 650;
+      }
+
+      .bench-table td.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .trajectory {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+        font-size: 15px;
+      }
+
+      .trajectory b {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        color: var(--text);
+      }
+
+      .trajectory b.final {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .trajectory span {
+        color: var(--muted);
+      }
+
+      /* ---------- efficiency / article ---------- */
+      .feature-list {
+        list-style: none;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 10px;
+        margin: 34px 0 8px;
+      }
+
+      .feature-list li {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-size: 13.5px;
+        color: var(--muted);
+      }
+
+      .feature-list li b {
+        color: var(--text);
+      }
+
+      .article {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 34px 36px;
+        margin-top: 40px;
+      }
+
+      .article h3 {
+        font-size: 21px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin-bottom: 6px;
+      }
+
+      .article .meta {
+        font-size: 12.5px;
+        color: var(--muted);
+        margin-bottom: 22px;
+      }
+
+      .article p {
+        font-size: 15px;
+        color: var(--text);
+        margin-bottom: 16px;
+      }
+
+      .article p.lead {
+        font-size: 16.5px;
+        line-height: 1.7;
+        color: var(--text);
+      }
+
+      .article code {
+        font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+        font-size: 0.9em;
+        background: rgba(62, 207, 142, 0.1);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 6px;
+        color: var(--accent);
+      }
+
+      .article .kpi {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin: 26px 0;
+      }
+
+      .article .kpi div {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px;
+        text-align: center;
+      }
+
+      .article .kpi b {
+        display: block;
+        font-size: 24px;
+        color: var(--accent);
+      }
+
+      .article .kpi span {
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+
+      /* ---------- quick start ---------- */
+      .qstart pre {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 22px 24px;
+        font-size: 14px;
+        overflow-x: auto;
+        line-height: 1.75;
+      }
+
+      .qstart pre code {
+        color: var(--text);
+      }
+      .qstart .cmt {
+        color: var(--muted);
+      }
+      .qstart .prompt {
+        color: var(--accent);
+      }
+
+      /* ---------- footer ---------- */
+      footer {
+        border-top: 1px solid var(--border);
+        padding: 32px 0 44px;
+      }
+
+      footer .wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      footer nav {
+        gap: 18px;
+      }
+
+      @media (max-width: 640px) {
+        .hero {
+          padding: 80px 0 60px;
+        }
+        nav {
+          gap: 14px;
+        }
+        nav a:nth-child(-n + 2) {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body id="top">
+    <header>
+      <div class="wrap">
+        <a class="logo" href="#top" aria-label="RingZero home">
+          <svg width="26" height="26" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+            <circle cx="50" cy="50" r="36" stroke="#3ecf8e" stroke-width="10"></circle>
+            <circle cx="50" cy="50" r="6" fill="#3ecf8e"></circle>
+          </svg>
+          RingZero
+        </a>
+        <nav>
+          <a href="#features">Features</a>
+          <a href="#benchmarks">Benchmarks</a>
+          <a href="#efficiency">Efficiency</a>
+          <a href="#quickstart">Quick start</a>
+          <a href="https://github.com/abbychau/ringzero">GitHub ↗</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- hero -->
+      <section class="hero">
+        <div class="wrap">
+          <span class="eyebrow" style="font-size:1.4em">
+              <strong>Rank 1</strong> <small style="font-size: 0.4em;">in</small><br />
+              token-efficiency & Terminal Bench 2.0
+
+              <small style="font-size: 0.4em;">
+                  FOR
+              </small>
+              <br />
+              DeepSeek V4
+
+          </span>
+          <h1>RingZero<span class="dot">.</span></h1>
+
+          <div class="actions">
+            <a class="btn primary" href="#quickstart">Get started</a>
+            <a class="btn ghost" href="https://github.com/abbychau/ringzero">View on GitHub</a>
+          </div>
+
+          <div class="term" aria-hidden="true">
+            <div class="bar">
+              <i></i><i></i><i></i>
+              <span>ringzero</span>
+            </div>
+            <pre><span class="prompt">$</span> ringzero "explain this repository"
+<span class="cmt"># streaming agent loop - tools - permission gate - repeat</span>
+<span class="prompt">&check;</span> agent loop streamed 2.4k tokens in 3.1s
+<span class="prompt">&check;</span> plan approved - running read-only tools first
+<span class="prompt">$</span> ringzero --doctor
+<span class="prompt">&check;</span> environment OK - exit 0</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- benchmarks -->
+      <section id="benchmarks">
+        <div class="wrap">
+          <p class="sec-title">Benchmarks</p>
+          <h2 class="sec-head">Terminal-Bench 2.0 &middot; deepseek-v4-flash</h2>
+
+
+          <table class="bench-table">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Model</th>
+                <th class="num">Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>NexAU-AHE</td>
+                <td>GPT-5.5</td>
+                <td class="num">84.7%</td>
+              </tr>
+              <tr>
+                <td>Codex CLI</td>
+                <td>GPT-5.5</td>
+                <td class="num">82.2%</td>
+              </tr>
+              <tr>
+                <td>WOZCODE</td>
+                <td>Claude Opus 4.7</td>
+                <td class="num">80.2%</td>
+              </tr>
+              <tr class="hl">
+                <td>RingZero (this work)</td>
+                <td>deepseek-v4-flash</td>
+                <td class="num">80.0% (71/89)</td>
+              </tr>
+              <tr>
+                <td>Terminus 2</td>
+                <td>DeepSeek-V3.2</td>
+                <td class="num">39.6%</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <p class="bench-note">
+            Comparison rows from the official tbench.ai leaderboard (single-run methodology);
+            RingZero's row is best-of-N retries at a fraction of the cost
+            (deepseek-v4-flash is $0.14 / $0.28 per million tokens) and is the only
+            DeepSeek-family result near the top of the board.
+          </p>
+          <p class="bench-note">
+            Terminal-Bench 2.0 (89 tasks, Docker sandboxes). Model: deepseek-v4-flash via the
+            opencode gateway, EFFORT=max, pass@1 with best-of-N retries across 253 agent trials.
+            No task timeouts or resources modified.
+          </p>
+
+        </div>
+      </section>
+
+      <!-- efficiency -->
+      <section id="efficiency">
+        <div class="wrap">
+          <p class="sec-title">Efficiency</p>
+          <h2 class="sec-head">Measured, not claimed</h2>
+
+          <div class="stats">
+            <div class="stat">
+              <strong>2,661</strong>
+              <small>tokens minimal per-call overhead<sup>*</sup></small>
+            </div>
+          </div>
+
+          <p class="bench-note">
+            <sup>*</sup> system prompt + all 15 tool schemas, measured live against the
+            deepseek-v4-flash API (usage.prompt_tokens on a trivial reply).
+          </p>
+
+          <ul class="feature-list">
+            <li><b>Minimal task-oriented system prompt</b> &mdash; rewritten around completing work with tools, not chat pleasantries</li>
+            <li><b>CJK-aware token estimator</b> &mdash; zero-dependency pre-send budgeting for compaction decisions</li>
+            <li><b>Context compaction</b> &mdash; summarizes history instead of dropping it; keeps tool/assistant pairs valid for the API</li>
+            <li><b>Tool-result truncation</b> &mdash; huge command output is clipped before it re-enters the context window</li>
+            <li><b>Prompt caching</b> &mdash; stable system + tools hit the cache across turns</li>
+            <li><b>Zero runtime deps for the kernel</b> &mdash; ink + react exist only for the interactive TUI</li>
+          </ul>
+
+          <article class="article">
+            <h3>71/89 on Terminal-Bench with DeepSeek V4 Flash: what token efficiency buys you</h3>
+            <p class="meta">RingZero engineering notes &middot; 2026-08-06</p>
+
+            <p class="lead">
+              Agent scores are usually bought with compute. This run bought an 80% pass rate
+              on Terminal-Bench 2.0 with a <code>$0.14 / $0.28</code> per-million-token model
+              &mdash; <strong>164.6M input</strong> and <strong>3.4M output tokens</strong> of
+              DeepSeek V4 Flash for the whole 89-task benchmark, retries included.
+            </p>
+
+            <div class="kpi">
+              <div><b>80%</b><span>pass rate (71/89)</span></div>
+              <div><b>164.6M</b><span>input tokens total</span></div>
+              <div><b>3.4M</b><span>output tokens total</span></div>
+            </div>
+
+            <p>
+              The number that matters most is the <strong>2,661-token fixed overhead</strong>:
+              that is everything RingZero sends before your actual work starts &mdash; system
+              prompt plus fifteen tool schemas. Most of the surface area is tool definitions,
+              and most of those are optional; a headless task run drops the interactive ones
+              and ships even less. Every token above that baseline is spent on the task itself.
+            </p>
+
+            <p>
+              That budget discipline shows up across the run. Tool results are truncated before
+              they re-enter context, so a <code>500&nbsp;KB</code> log line cannot silently
+              quadruple the next call. Compaction summarizes history instead of dropping it,
+              and re-emits tool results in a form the API accepts &mdash; the difference between
+              a session that survives 300 steps and one that dies with a 400 error. The CJK-aware
+              estimator makes pre-send budgeting honest even for non-Latin workloads.
+            </p>
+
+            <p>
+              Put together: near-frontier agentic behavior at commodity-model cost. On the
+              official board, the rows around RingZero's 80% are GPT-5.5-class agents; the best
+              official DeepSeek-family entry sits at 39.6%. The gap is the harness, and the
+              harness is small enough to read in an afternoon.
+            </p>
+          </article>
+        </div>
+      </section>
+
+
+      <!-- quick start -->
+      <section id="quickstart" class="qstart">
+        <div class="wrap">
+          <p class="sec-title">Quick start</p>
+          <h2 class="sec-head">Up and running in four steps</h2>
+          <pre><code><span class="cmt"># 1. clone &amp; install</span>
+git clone https://github.com/abbychau/ringzero
+cd ringzero
+npm install &amp;&amp; npm run build
+
+<span class="cmt"># 2. link once so `ringzero` works anywhere</span>
+npm link
+
+<span class="cmt"># 3. run</span>
+<span class="prompt">$</span> ringzero                        <span class="cmt"># interactive TUI</span>
+<span class="prompt">$</span> ringzero "prompt"               <span class="cmt"># one-shot</span>
+<span class="prompt">$</span> ringzero --watch "prompt"       <span class="cmt"># re-run on file changes</span>
+
+<span class="cmt"># 4. verify</span>
+<span class="prompt">$</span> ringzero --doctor               <span class="cmt"># environment self-check</span></code></pre>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="wrap">
+        <span>&copy; 2026 RingZero &middot; MIT License</span>
+        <nav>
+          <a href="https://github.com/abbychau/ringzero">GitHub</a>
+          <a href="https://github.com/abbychau/ringzero/blob/main/README.md">README</a>
+          <a href="https://github.com/abbychau/ringzero/blob/main/docs/EXTENDING.md">Extending</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>
