@@ -90,6 +90,19 @@ npm test               # build + node --test
 
 ## Install without npm
 
+### Windows: one-line installer (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/abbychau/ringzero/main/install.ps1 | iex
+ringzero
+```
+
+Downloads the latest self-extracting `ringzero-win-x64.exe` from GitHub
+Releases into `%LOCALAPPDATA%\Programs\RingZero`, adds it to your user PATH
+(no admin needed), and warms up the first-run unpack — so `ringzero` works
+immediately in that shell and in new ones. The script is reviewable in the
+repo: `install.ps1`.
+
 ### Windows: winget
 
 Once the package is accepted into the community repo, Windows users install with:
@@ -103,11 +116,10 @@ and puts the `ringzero` command on your PATH. On first run it unpacks its
 embedded Node.js runtime + app to `%LOCALAPPDATA%\RingZero\` and then behaves
 like a normal install.
 
-> Status: the winget manifests (reference copies in `winget/`) still need a
-> one-time manual submission to microsoft/winget-pkgs plus a `WINGET_TOKEN`
-> PAT secret (see the workflow comments in `winget/Abbychau.RingZero.installer.yaml`
-> and `.github/workflows/winget.yml`). After that, every tagged release updates
-> the package automatically.
+> Status: submitted to microsoft/winget-pkgs
+> ([PR #413332](https://github.com/microsoft/winget-pkgs/pull/413332)); once
+> merged, every tagged release updates the package automatically (needs a
+> `WINGET_TOKEN` PAT secret, see `.github/workflows/winget.yml`).
 
 ### Portable zip (all platforms)
 

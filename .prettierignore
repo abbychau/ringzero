@@ -3,3 +3,4 @@ dist/
 package-lock.json
 *.jsonl
 scripts/ringzero-launcher.cs
+*.ps1
