@@ -4,6 +4,10 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build and attach assets to (e.g. v0.4.0)'
+        required: true
 
 permissions:
   contents: write
@@ -33,13 +37,40 @@ jobs:
           name: portable-${{ matrix.os }}
           path: build/portable/ringzero-*
       - name: Attach binaries to release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
+          tag="${{ inputs.tag || github.ref_name }}"
           cd "$GITHUB_WORKSPACE"
           gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --generate-notes || true
           gh release upload "$tag" build/portable/ringzero-* --clobber
+
+  # Note: a release created from inside a workflow with GITHUB_TOKEN does NOT
+  # fire the `release: published` event, so winget submission lives here
+  # instead of a separate release-triggered workflow.
+  winget:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
+    runs-on: windows-latest
+    steps:
+      - name: Verify WINGET_TOKEN is configured
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then
+            echo "::warning::WINGET_TOKEN secret is not set — skipping winget publish."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+      - name: Submit update to microsoft/winget-pkgs
+        if: env.SKIP != '1'
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          identifier: Abbychau.RingZero
+          installers-regex: '^ringzero-win-x64\.exe$'
+          release-tag: ${{ inputs.tag || github.ref_name }}
+          token: ${{ secrets.WINGET_TOKEN }}
+          max-versions-to-keep: 0
