@@ -1,0 +1,39 @@
+name: Publish to winget
+
+# Submits a manifest update for Abbychau.RingZero to microsoft/winget-pkgs
+# whenever a GitHub release is published. Requires the package to already
+# exist in winget-pkgs (see winget/Abbychau.RingZero.installer.yaml for the
+# one-time first submission) and a WINGET_TOKEN repo secret: a GitHub PAT
+# with `public_repo` scope, used to fork winget-pkgs and open the PR.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: 'GitHub release tag to publish to winget (e.g. v0.5.0)'
+        required: true
+
+jobs:
+  winget:
+    runs-on: windows-latest
+    steps:
+      - name: Verify WINGET_TOKEN is configured
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        shell: bash
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then
+            echo "::warning::WINGET_TOKEN secret is not set — skipping winget publish."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          fi
+      - name: Submit update to microsoft/winget-pkgs
+        if: env.SKIP != '1'
+        uses: vedantmgoyal2009/winget-releaser@v2
+        with:
+          identifier: Abbychau.RingZero
+          installers-regex: '^ringzero-win-x64\.exe$'
+          release-tag: ${{ inputs.release-tag || github.event.release.tag_name }}
+          token: ${{ secrets.WINGET_TOKEN }}
+          max-versions-to-keep: 0

@@ -26,6 +26,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:portable": "node scripts/build-portable.mjs",
+    "build:sfx": "node scripts/build-sfx.mjs",
     "start": "npm run build && node dist/src/cli/index.js",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",

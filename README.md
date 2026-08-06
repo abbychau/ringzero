@@ -88,6 +88,59 @@ npm run build          # tsc → dist/
 npm test               # build + node --test
 ```
 
+## Install without npm
+
+### Windows: winget
+
+Once the package is accepted into the community repo, Windows users install with:
+
+```powershell
+winget install --id Abbychau.RingZero -e
+```
+
+This installs the single-file, self-extracting `ringzero.exe` as a portable app
+and puts the `ringzero` command on your PATH. On first run it unpacks its
+embedded Node.js runtime + app to `%LOCALAPPDATA%\RingZero\` and then behaves
+like a normal install.
+
+> Status: the winget manifests (reference copies in `winget/`) still need a
+> one-time manual submission to microsoft/winget-pkgs plus a `WINGET_TOKEN`
+> PAT secret (see the workflow comments in `winget/Abbychau.RingZero.installer.yaml`
+> and `.github/workflows/winget.yml`). After that, every tagged release updates
+> the package automatically.
+
+### Portable zip (all platforms)
+
+No Node, no npm needed. Download the zip for your OS from the
+[latest release](https://github.com/abbychau/ringzero/releases), unzip it, and
+run:
+
+```bash
+# Linux / macOS
+unzip ringzero-linux-x64.zip   # or ringzero-darwin-arm64.zip
+./ringzero/ringzero --version
+
+# Windows: unzip ringzero-win-x64.zip, then run ringzero\ringzero.cmd
+# (or just download ringzero-win-x64.exe — the self-extracting single file)
+```
+
+The zip is self-contained: it bundles the compiled app, its production
+dependencies, and a Node.js runtime, with `ringzero` / `ringzero.cmd` launchers.
+It runs exactly like a dev checkout — the full Ink TUI, one-shot runs, REPL,
+`--watch`, `--rpc`, skills and plugins all work. Sessions still live under
+`~/.ringzero/`.
+
+These zips are produced from tagged releases (`v*` tags) by the
+`Portable builds` GitHub Actions workflow via `npm run build:portable`
+(`npm run build:sfx` for the single-file Windows launcher). To build locally:
+
+```bash
+npm run build && npm run build:portable   # → build/portable/ringzero-<platform>-<arch>.zip
+npm run build:sfx                         # (Windows) → build/portable/ringzero-win-x64.exe
+```
+
+Only the build machine needs Node ≥ 20 and npm; end users need neither.
+
 ## How to run & test
 
 ```bash
