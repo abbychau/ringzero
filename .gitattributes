@@ -1,0 +1,17 @@
+# Normalize line endings: store LF in the repo and check out LF on every
+# platform. Without this, the Windows CI runner (git autocrlf=true) checks
+# files out with CRLF, which prettier --check flags as unformatted (prettier's
+# default endOfLine is lf) — making the format check fail on 100+ files.
+* text=auto eol=lf
+
+# Binary files must never be touched by line-ending normalization.
+*.zip binary
+*.exe binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.wasm binary

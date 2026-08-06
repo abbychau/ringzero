@@ -411,9 +411,7 @@ export class Agent {
         // file, ran a command, committed). Inspecting alone (read/grep/list)
         // or just describing work does not count. Bounce it back as a user
         // message so the model continues and finishes the work with tools.
-        const hasEffectiveWork = [...this.toolUsage.keys()].some((n) =>
-          EFFECTIVE_TOOLS.has(n),
-        );
+        const hasEffectiveWork = [...this.toolUsage.keys()].some((n) => EFFECTIVE_TOOLS.has(n));
         if (this.opts.requireToolUse && !hasEffectiveWork) {
           push({
             id: newId('msg'),

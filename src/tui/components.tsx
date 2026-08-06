@@ -173,11 +173,11 @@ function sidebarContent(
   // own row.
   const statusRows: SidebarRow[] = [
     { text: '', dim: true },
-    { text: state.status, dim: true, spinner: true  },
+    { text: state.status, dim: true, spinner: true },
   ];
   if (state.scroll > 0)
     statusRows.push({ text: `↑${state.scroll} ${visible}/${total}`, dim: true });
-  if (state.transcriptFocus){
+  if (state.transcriptFocus) {
     statusRows.push({ text: 'Esc to input', dim: true });
   }
 

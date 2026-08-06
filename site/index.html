@@ -121,7 +121,11 @@
       .hero {
         padding: 110px 0 90px;
         text-align: center;
-        background: radial-gradient(ellipse 70% 55% at 50% 0%, rgba(30, 140, 84, 0.08), transparent 70%);
+        background: radial-gradient(
+          ellipse 70% 55% at 50% 0%,
+          rgba(30, 140, 84, 0.08),
+          transparent 70%
+        );
       }
 
       .hero .eyebrow {
@@ -571,19 +575,15 @@
       <!-- hero -->
       <section class="hero">
         <div class="wrap">
-          <span class="eyebrow" style="font-size:1.4em">
-              <strong>Rank 1</strong> <small style="font-size: 0.4em;">in</small><br />
-              token-efficiency & Terminal Bench 2.0
+          <span class="eyebrow" style="font-size: 1.4em">
+            <strong>Rank 1</strong> <small style="font-size: 0.4em">in</small><br />
+            token-efficiency & Terminal Bench 2.0
 
-              <small style="font-size: 0.4em;">
-                  FOR
-              </small>
-              <br />
-              DeepSeek V4
-
+            <small style="font-size: 0.4em"> FOR </small>
+            <br />
+            DeepSeek V4
           </span>
           <h1>RingZero<span class="dot">.</span></h1>
-
 
           <div class="term" aria-hidden="true">
             <div class="bar">
@@ -605,7 +605,6 @@
         <div class="wrap">
           <p class="sec-title">Benchmarks</p>
           <h2 class="sec-head">Terminal-Bench 2.0 &middot; deepseek-v4-flash</h2>
-
 
           <table class="bench-table">
             <thead>
@@ -646,16 +645,15 @@
 
           <p class="bench-note">
             Comparison rows from the official tbench.ai leaderboard (single-run methodology);
-            RingZero's row is best-of-N retries at a fraction of the cost
-            (deepseek-v4-flash is $0.14 / $0.28 per million tokens) and is the only
-            DeepSeek-family result near the top of the board.
+            RingZero's row is best-of-N retries at a fraction of the cost (deepseek-v4-flash is
+            $0.14 / $0.28 per million tokens) and is the only DeepSeek-family result near the top of
+            the board.
           </p>
           <p class="bench-note">
             Terminal-Bench 2.0 (89 tasks, Docker sandboxes). Model: deepseek-v4-flash via the
-            opencode gateway, EFFORT=max, pass@1 with best-of-N retries across 253 agent trials.
-            No task timeouts or resources modified.
+            opencode gateway, EFFORT=max, pass@1 with best-of-N retries across 253 agent trials. No
+            task timeouts or resources modified.
           </p>
-
         </div>
       </section>
 
@@ -678,12 +676,27 @@
           </p>
 
           <ul class="feature-list">
-            <li><b>Minimal task-oriented system prompt</b> &mdash; rewritten around completing work with tools, not chat pleasantries</li>
-            <li><b>CJK-aware token estimator</b> &mdash; zero-dependency pre-send budgeting for compaction decisions</li>
-            <li><b>Context compaction</b> &mdash; summarizes history instead of dropping it; keeps tool/assistant pairs valid for the API</li>
-            <li><b>Tool-result truncation</b> &mdash; huge command output is clipped before it re-enters the context window</li>
+            <li>
+              <b>Minimal task-oriented system prompt</b> &mdash; rewritten around completing work
+              with tools, not chat pleasantries
+            </li>
+            <li>
+              <b>CJK-aware token estimator</b> &mdash; zero-dependency pre-send budgeting for
+              compaction decisions
+            </li>
+            <li>
+              <b>Context compaction</b> &mdash; summarizes history instead of dropping it; keeps
+              tool/assistant pairs valid for the API
+            </li>
+            <li>
+              <b>Tool-result truncation</b> &mdash; huge command output is clipped before it
+              re-enters the context window
+            </li>
             <li><b>Prompt caching</b> &mdash; stable system + tools hit the cache across turns</li>
-            <li><b>Zero runtime deps for the kernel</b> &mdash; ink + react exist only for the interactive TUI</li>
+            <li>
+              <b>Zero runtime deps for the kernel</b> &mdash; ink + react exist only for the
+              interactive TUI
+            </li>
           </ul>
 
           <article class="article">
@@ -691,10 +704,10 @@
             <p class="meta">RingZero engineering notes &middot; 2026-08-06</p>
 
             <p class="lead">
-              Agent scores are usually bought with compute. This run bought an 80% pass rate
-              on Terminal-Bench 2.0 with a <code>$0.14 / $0.28</code> per-million-token model
-              &mdash; <strong>164.6M input</strong> and <strong>3.4M output tokens</strong> of
-              DeepSeek V4 Flash for the whole 89-task benchmark, retries included.
+              Agent scores are usually bought with compute. This run bought an 80% pass rate on
+              Terminal-Bench 2.0 with a <code>$0.14 / $0.28</code> per-million-token model &mdash;
+              <strong>164.6M input</strong> and <strong>3.4M output tokens</strong> of DeepSeek V4
+              Flash for the whole 89-task benchmark, retries included.
             </p>
 
             <div class="kpi">
@@ -704,32 +717,31 @@
             </div>
 
             <p>
-              The number that matters most is the <strong>2,661-token fixed overhead</strong>:
-              that is everything RingZero sends before your actual work starts &mdash; system
-              prompt plus fifteen tool schemas. Most of the surface area is tool definitions,
-              and most of those are optional; a headless task run drops the interactive ones
-              and ships even less. Every token above that baseline is spent on the task itself.
+              The number that matters most is the <strong>2,661-token fixed overhead</strong>: that
+              is everything RingZero sends before your actual work starts &mdash; system prompt plus
+              fifteen tool schemas. Most of the surface area is tool definitions, and most of those
+              are optional; a headless task run drops the interactive ones and ships even less.
+              Every token above that baseline is spent on the task itself.
             </p>
 
             <p>
-              That budget discipline shows up across the run. Tool results are truncated before
-              they re-enter context, so a <code>500&nbsp;KB</code> log line cannot silently
-              quadruple the next call. Compaction summarizes history instead of dropping it,
-              and re-emits tool results in a form the API accepts &mdash; the difference between
-              a session that survives 300 steps and one that dies with a 400 error. The CJK-aware
-              estimator makes pre-send budgeting honest even for non-Latin workloads.
+              That budget discipline shows up across the run. Tool results are truncated before they
+              re-enter context, so a <code>500&nbsp;KB</code> log line cannot silently quadruple the
+              next call. Compaction summarizes history instead of dropping it, and re-emits tool
+              results in a form the API accepts &mdash; the difference between a session that
+              survives 300 steps and one that dies with a 400 error. The CJK-aware estimator makes
+              pre-send budgeting honest even for non-Latin workloads.
             </p>
 
             <p>
-              Put together: near-frontier agentic behavior at commodity-model cost. On the
-              official board, the rows around RingZero's 80% are GPT-5.5-class agents; the best
-              official DeepSeek-family entry sits at 39.6%. The gap is the harness, and the
-              harness is small enough to read in an afternoon.
+              Put together: near-frontier agentic behavior at commodity-model cost. On the official
+              board, the rows around RingZero's 80% are GPT-5.5-class agents; the best official
+              DeepSeek-family entry sits at 39.6%. The gap is the harness, and the harness is small
+              enough to read in an afternoon.
             </p>
           </article>
         </div>
       </section>
-
 
       <!-- quick start -->
       <section id="quickstart" class="qstart">
