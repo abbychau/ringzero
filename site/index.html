@@ -164,6 +164,31 @@
         flex-wrap: wrap;
       }
 
+      .hero .install {
+        margin: 30px auto 0;
+        display: inline-block;
+        font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+        font-size: 14px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 11px 18px;
+        color: var(--text);
+        user-select: all;
+      }
+
+      .hero .install .ps {
+        color: var(--accent);
+        font-weight: 600;
+        margin-right: 10px;
+      }
+
+      .hero .install-note {
+        margin: 12px auto 0;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
       .btn {
         display: inline-block;
         padding: 12px 22px;
@@ -548,6 +573,15 @@
         nav a:nth-child(-n + 2) {
           display: none;
         }
+        .hero .install {
+          display: block;
+          font-size: 12px;
+          overflow-wrap: anywhere;
+          text-align: left;
+        }
+        .hero .install-note {
+          font-size: 12px;
+        }
       }
     </style>
   </head>
@@ -584,6 +618,15 @@
             DeepSeek V4
           </span>
           <h1>RingZero<span class="dot">.</span></h1>
+
+          <div class="install" aria-label="Install RingZero on Windows">
+            <span class="ps">PS&gt;</span>irm
+            https://raw.githubusercontent.com/abbychau/ringzero/main/install.ps1 | iex
+          </div>
+          <p class="install-note">
+            Windows one-line install &middot; no admin needed &middot; then run
+            <code>ringzero</code>
+          </p>
 
           <div class="term" aria-hidden="true">
             <div class="bar">
