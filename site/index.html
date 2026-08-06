@@ -10,17 +10,18 @@
     <title>RingZero &middot; Minimal token-efficient agent harness</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='36' fill='none' stroke='%233ecf8e' stroke-width='10'/%3E%3Ccircle cx='50' cy='50' r='6' fill='%233ecf8e'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='36' fill='none' stroke='%231e8c54' stroke-width='10'/%3E%3Ccircle cx='50' cy='50' r='6' fill='%231e8c54'/%3E%3C/svg%3E"
     />
+    <meta name="theme-color" content="#f4f9f2" />
     <style>
       :root {
-        --bg: #0a0e14;
-        --panel: #10151d;
-        --border: #1c2430;
-        --text: #d7e0ea;
-        --muted: #8b98a9;
-        --accent: #3ecf8e;
-        --accent-dim: #2a9d6e;
+        --bg: #f4f9f2;
+        --panel: #ffffff;
+        --border: #dde8d8;
+        --text: #1d3327;
+        --muted: #5c7266;
+        --accent: #1e8c54;
+        --accent-dim: #146b3f;
       }
 
       * {
@@ -75,7 +76,7 @@
         position: sticky;
         top: 0;
         z-index: 10;
-        background: rgba(10, 14, 20, 0.85);
+        background: rgba(244, 249, 242, 0.85);
         backdrop-filter: blur(8px);
         border-bottom: 1px solid var(--border);
       }
@@ -120,6 +121,7 @@
       .hero {
         padding: 110px 0 90px;
         text-align: center;
+        background: radial-gradient(ellipse 70% 55% at 50% 0%, rgba(30, 140, 84, 0.08), transparent 70%);
       }
 
       .hero .eyebrow {
@@ -128,8 +130,6 @@
         letter-spacing: 0.18em;
         text-transform: uppercase;
         color: var(--accent);
-        border: 1px solid var(--border);
-        border-radius: 999px;
         padding: 6px 14px;
         margin-bottom: 28px;
       }
@@ -163,7 +163,7 @@
       .btn {
         display: inline-block;
         padding: 12px 22px;
-        border-radius: 8px;
+        border-radius: 4px;
         font-size: 15px;
         font-weight: 600;
         border: 1px solid var(--border);
@@ -178,7 +178,7 @@
 
       .btn.primary {
         background: var(--accent);
-        color: #06231a;
+        color: #ffffff;
         border-color: var(--accent);
       }
       .btn.primary:hover {
@@ -198,7 +198,7 @@
         text-align: left;
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 4px;
         overflow: hidden;
       }
 
@@ -213,7 +213,7 @@
       .term .bar i {
         width: 10px;
         height: 10px;
-        border-radius: 50%;
+        border-radius: 4px;
         display: inline-block;
       }
       .term .bar i:nth-child(1) {
@@ -278,7 +278,7 @@
       .card {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 4px;
         padding: 22px;
       }
 
@@ -308,21 +308,20 @@
       .stats {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 16px;
+        gap: 12px;
         margin-bottom: 44px;
       }
 
       .stat {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 24px 20px;
+        border-radius: 4px;
+        padding: 14px 20px;
         text-align: center;
       }
 
       .stat strong {
-        display: block;
-        font-size: 40px;
+        font-size: 30px;
         font-weight: 750;
         letter-spacing: -0.03em;
         color: var(--accent);
@@ -335,7 +334,6 @@
       }
 
       .stat small {
-        display: block;
         margin-top: 6px;
         font-size: 12px;
         color: var(--muted);
@@ -369,7 +367,7 @@
       }
 
       .bench-table tr.hl td {
-        background: rgba(62, 207, 142, 0.08);
+        background: rgba(30, 140, 84, 0.08);
         font-weight: 650;
       }
 
@@ -390,7 +388,7 @@
       .trajectory b {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 6px;
+        border-radius: 4px;
         padding: 4px 10px;
         color: var(--text);
       }
@@ -416,7 +414,7 @@
       .feature-list li {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 4px;
         padding: 12px 16px;
         font-size: 13.5px;
         color: var(--muted);
@@ -429,7 +427,7 @@
       .article {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 12px;
+        border-radius: 4px;
         padding: 34px 36px;
         margin-top: 40px;
       }
@@ -462,7 +460,7 @@
       .article code {
         font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
         font-size: 0.9em;
-        background: rgba(62, 207, 142, 0.1);
+        background: rgba(30, 140, 84, 0.1);
         border: 1px solid var(--border);
         border-radius: 4px;
         padding: 1px 6px;
@@ -479,7 +477,7 @@
       .article .kpi div {
         background: var(--bg);
         border: 1px solid var(--border);
-        border-radius: 8px;
+        border-radius: 4px;
         padding: 14px;
         text-align: center;
       }
@@ -499,7 +497,7 @@
       .qstart pre {
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 10px;
+        border-radius: 4px;
         padding: 22px 24px;
         font-size: 14px;
         overflow-x: auto;
@@ -554,8 +552,8 @@
       <div class="wrap">
         <a class="logo" href="#top" aria-label="RingZero home">
           <svg width="26" height="26" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-            <circle cx="50" cy="50" r="36" stroke="#3ecf8e" stroke-width="10"></circle>
-            <circle cx="50" cy="50" r="6" fill="#3ecf8e"></circle>
+            <circle cx="50" cy="50" r="36" stroke="#1e8c54" stroke-width="10"></circle>
+            <circle cx="50" cy="50" r="6" fill="#1e8c54"></circle>
           </svg>
           RingZero
         </a>
@@ -586,10 +584,6 @@
           </span>
           <h1>RingZero<span class="dot">.</span></h1>
 
-          <div class="actions">
-            <a class="btn primary" href="#quickstart">Get started</a>
-            <a class="btn ghost" href="https://github.com/abbychau/ringzero">View on GitHub</a>
-          </div>
 
           <div class="term" aria-hidden="true">
             <div class="bar">
