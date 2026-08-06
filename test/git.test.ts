@@ -32,6 +32,12 @@ function makeRepo(): string {
   execFileSync('git', ['init', '-q', '-b', 'main'], { cwd: dir });
   execFileSync('git', ['config', 'user.name', 'test'], { cwd: dir });
   execFileSync('git', ['config', 'user.email', 'test@test'], { cwd: dir });
+  // The checkpoint tests assert byte-exact contents (LF), so the temp repo
+  // must never apply line-ending conversion regardless of the machine's
+  // global git config (GitHub Windows runners default to core.autocrlf=true,
+  // which would turn every checked-out file into CRLF).
+  execFileSync('git', ['config', 'core.autocrlf', 'false'], { cwd: dir });
+  execFileSync('git', ['config', 'core.eol', 'lf'], { cwd: dir });
   writeFileSync(join(dir, 'a.txt'), 'one\n');
   execFileSync('git', ['add', '-A'], { cwd: dir });
   execFileSync('git', ['commit', '-qm', 'init'], { cwd: dir });
