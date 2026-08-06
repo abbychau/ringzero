@@ -30,8 +30,44 @@ export async function runOneShot(
   const agent = runner.agent();
   const t0 = performance.now();
 
+  // In --json mode the stream is intended for machine consumers (parsing the
+  // finish event for usage/steps/reason). To keep stdout bounded in constrained
+  // sandboxes we:
+  //  - coalesce consecutive thinking deltas into a single event (the provider
+  //    streams reasoning incrementally, one tiny chunk at a time);
+  //  - cap the size of each event's text-ish fields (thinking/tool output),
+  //    since a single tool call (e.g. primer3) can emit hundreds of KB.
+  const MAX_JSON_FIELD = 4096;
+  const cap = (s: string | undefined): string | undefined =>
+    s && s.length > MAX_JSON_FIELD ? `${s.slice(0, MAX_JSON_FIELD)}\n…[truncated]` : s;
+
+  let thinkingBuf = '';
+  const flushThinking = (): void => {
+    if (thinkingBuf) {
+      console.log(JSON.stringify({ sessionId, type: 'thinking', text: cap(thinkingBuf) }));
+      thinkingBuf = '';
+    }
+  };
+
   for await (const ev of agent.run(prompt, { images: opts.images })) {
     if (opts.json) {
+      if (ev.type === 'thinking') {
+        thinkingBuf += ev.text;
+        continue;
+      }
+      flushThinking();
+      if (ev.type === 'tool_result' && ev.output) {
+        console.log(
+          JSON.stringify({
+            sessionId,
+            type: 'tool_result',
+            name: ev.name,
+            output: cap(ev.output),
+            truncated: ev.truncated,
+          }),
+        );
+        continue;
+      }
       console.log(JSON.stringify({ sessionId, ...ev }));
     } else if (ev.type === 'text') {
       process.stdout.write(ev.text);
@@ -49,5 +85,6 @@ export async function runOneShot(
       );
     }
   }
+  flushThinking();
   notifyRunComplete(Math.round((performance.now() - t0) / 1000));
 }

@@ -32,15 +32,35 @@ export function parseSSE(input: string): SSEEvent[] {
 export async function* consumeSSE(
   body: ReadableStream<Uint8Array>,
   signal?: AbortSignal,
+  /** Abort if no bytes arrive for this long (stalled stream). 0 = off. */
+  idleTimeoutMs = 0,
 ): AsyncGenerator<SSEEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
   let event: string | undefined;
+  // Race each read against a fresh idle timer so a server that stops sending
+  // surfaces an error instead of hanging forever.
+  const read = (): Promise<ReadableStreamReadResult<Uint8Array>> => {
+    if (idleTimeoutMs <= 0) return reader.read();
+    let t: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) => {
+        t = setTimeout(
+          () => reject(new Error(`API stream idle — no data for ${idleTimeoutMs}ms`)),
+          idleTimeoutMs,
+        );
+      }),
+    ]).finally(() => clearTimeout(t));
+  };
   try {
     while (true) {
-      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-      const { done, value } = await reader.read();
+      if (signal?.aborted)
+        throw signal.reason instanceof Error
+          ? signal.reason
+          : new DOMException('Aborted', 'AbortError');
+      const { done, value } = await read();
       if (done) break;
       buf += decoder.decode(value, { stream: true });
       let idx: number;
@@ -70,6 +90,11 @@ export async function* consumeSSE(
       }
     }
   } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      /* already closed, or cancelled by the idle-timeout path */
+    }
     reader.releaseLock();
   }
 }

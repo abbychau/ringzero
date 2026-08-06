@@ -4,6 +4,12 @@ import { createOpenAICompatProvider } from './openai-compat.js';
 import { createAnthropicProvider } from './anthropic.js';
 import { createGeminiProvider } from './gemini.js';
 
+/** Positive env var (ms) or fallback; used for request timeouts. */
+function ms(v: string | undefined, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 /**
  * Pick the default provider from env (first match wins):
  *  - Anthropic key AND no OpenAI-compatible URL → Anthropic.
@@ -38,5 +44,9 @@ export function createDefaultProvider(env: Env): Provider {
     model: env.model,
     effort: env.effort,
     retries: Number(process.env.RINGZERO_RETRIES) || 2,
+    // Timeouts turn a hung connect / stalled stream into a visible error
+    // instead of an endless spinner (RINGZERO_TIMEOUT_MS / RINGZERO_IDLE_TIMEOUT_MS).
+    timeoutMs: ms(process.env.RINGZERO_TIMEOUT_MS, 300_000),
+    idleTimeoutMs: ms(process.env.RINGZERO_IDLE_TIMEOUT_MS, 120_000),
   });
 }

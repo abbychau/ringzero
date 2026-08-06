@@ -16,12 +16,16 @@ export interface OpenAICompatConfig {
   baseURL: string;
   apiKey: string;
   model: string;
-  /** Reasoning effort sent as `reasoning_effort` (low/medium/high). */
+  /** Reasoning effort sent as `reasoning_effort` (low/medium/high/max). */
   effort?: EffortLevel;
   /** Override the HTTP error message for auth failures (surfaced to user). */
   headers?: Record<string, string>;
   /** Transient-failure retries (429/5xx/network). Default 2. */
   retries?: number;
+  /** Max time (ms) to wait for the initial response; aborts a hung connect. Default 300s. */
+  timeoutMs?: number;
+  /** Max idle time (ms) between stream chunks; aborts a stalled stream. Default 120s. */
+  idleTimeoutMs?: number;
 }
 
 interface ChatChunkUsage {
@@ -120,6 +124,15 @@ export function createOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
       if (req.temperature !== undefined) body.temperature = req.temperature;
       if (cfg.effort) body.reasoning_effort = cfg.effort;
 
+      // Timeouts so a hung/stalled API surfaces an error instead of an endless
+      // spinner. The connect timeout only bounds the FETCH (time to first byte);
+      // the stream is bounded by the idle timeout inside consumeSSE (time
+      // between chunks), so a long-but-healthy reasoning stream is never cut.
+      const connectTimeout = cfg.timeoutMs ?? 300_000;
+      const connectSignal = req.signal
+        ? AbortSignal.any([req.signal, AbortSignal.timeout(connectTimeout)])
+        : AbortSignal.timeout(connectTimeout);
+
       const res = await fetchWithRetry(
         `${baseURL}/chat/completions`,
         {
@@ -130,9 +143,9 @@ export function createOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
             ...cfg.headers,
           },
           body: JSON.stringify(body),
-          signal: req.signal,
+          signal: connectSignal,
         },
-        { retries: cfg.retries, signal: req.signal },
+        { retries: cfg.retries, signal: connectSignal },
       );
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
@@ -149,7 +162,7 @@ export function createOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
       let finishReason: string | undefined;
       const pending = new Map<number, ToolCall>();
 
-      for await (const ev of consumeSSE(res.body, req.signal)) {
+      for await (const ev of consumeSSE(res.body, req.signal, cfg.idleTimeoutMs ?? 120_000)) {
         let chunk: ChatChunk | undefined;
         try {
           chunk = JSON.parse(ev.data) as ChatChunk;

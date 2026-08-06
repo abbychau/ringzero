@@ -3,3 +3,5 @@ dist/
 .env
 .ringzero/
 *.log
+jobs*
+__pycache__/

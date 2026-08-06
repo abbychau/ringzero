@@ -32,6 +32,21 @@ const READ_ONLY_TOOLS = new Set([
   'web_search',
 ]);
 
+/**
+ * Tools that actually change the environment (write files, run commands, or
+ * commit). In task mode, a text-only finish before any of these have run is
+ * treated as "described work without doing it" and bounced back — merely
+ * inspecting files (read/grep/list) does NOT count as completing a task.
+ */
+const EFFECTIVE_TOOLS = new Set([
+  'write_file',
+  'edit_file',
+  'bash',
+  'git_commit',
+  'http_request',
+  'verify',
+]);
+
 /** Pure tools whose identical repeated calls are deduped within a run. */
 const CACHEABLE_TOOLS = new Set([
   'read_file',
@@ -108,6 +123,16 @@ export interface AgentOptions {
   planMode?: boolean;
   /** Max parallel tool executions per turn (default 4). */
   maxConcurrency?: number;
+  /**
+   * Task-oriented mode (enabled by Runner.taskMode / RINGZERO_TASK_MODE):
+   * when the model answers with text alone (no tool call) and NO tool has
+   * been executed yet this run, bounce the answer back instead of finishing.
+   * This is the autonomous-mode analog of an interactive harness handing
+   * control back to the user on a text-only step: in a headless task run
+   * there is no user, so we auto-"continue with tools" instead of declaring
+   * the task done. Counteracts "early finish" on autonomous benchmark tasks.
+   */
+  requireToolUse?: boolean;
 }
 
 function toProviderMessages(history: SessionMessage[]): ProviderMessage[] {
@@ -381,6 +406,28 @@ export class Agent {
 
       if (interrupted) continue; // next iteration drains the injected messages
       if (calls.length === 0) {
+        // Task mode: never accept a text-only "answer" before the agent has
+        // actually DONE the work — i.e. executed an effective tool (wrote a
+        // file, ran a command, committed). Inspecting alone (read/grep/list)
+        // or just describing work does not count. Bounce it back as a user
+        // message so the model continues and finishes the work with tools.
+        const hasEffectiveWork = [...this.toolUsage.keys()].some((n) =>
+          EFFECTIVE_TOOLS.has(n),
+        );
+        if (this.opts.requireToolUse && !hasEffectiveWork) {
+          push({
+            id: newId('msg'),
+            role: 'user',
+            content:
+              'You have not actually completed the task yet: you must create the ' +
+              'required output artifact(s) (write files) and/or run commands to ' +
+              'produce and verify the result. Merely inspecting files or describing ' +
+              'what to do is not enough. Use write_file/edit_file/bash to create the ' +
+              'deliverable, verify it, then finish.',
+            ts: Date.now(),
+          });
+          continue;
+        }
         reason = 'done';
         break;
       }

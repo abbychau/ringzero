@@ -264,6 +264,7 @@ test('effortLevel accepts known levels and rejects the rest', () => {
   assert.equal(effortLevel('low'), 'low');
   assert.equal(effortLevel('medium'), 'medium');
   assert.equal(effortLevel('high'), 'high');
+  assert.equal(effortLevel('max'), 'max');
   assert.equal(effortLevel('ultra'), undefined);
   assert.equal(effortLevel(''), undefined);
   assert.equal(effortLevel(undefined), undefined);

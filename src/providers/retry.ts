@@ -37,8 +37,12 @@ export async function fetchWithRetry(
     try {
       res = await fetch(url, init);
     } catch (err) {
-      if (attempt >= retries || (err instanceof DOMException && err.name === 'AbortError'))
-        throw err;
+      // Don't retry explicit aborts or timeouts: retrying a hung request just
+      // delays the error the user needs to see.
+      const isAbort =
+        err instanceof DOMException &&
+        (err.name === 'AbortError' || err.name === 'TimeoutError');
+      if (attempt >= retries || isAbort) throw err;
       attempt++;
       await sleep(base * 2 ** (attempt - 1), opts.signal);
       continue;

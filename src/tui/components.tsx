@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Text, useAnimation, useCursor } from 'ink';
 import { strWidth, truncateWidth } from './term.js';
 import {
+  FLASH_MS,
   inputLineCol,
   fmtSession,
   selectionRange,
@@ -98,13 +99,9 @@ function fmtBudget(n: number): string {
   return `${Math.round(n / 1000)}k`;
 }
 
-function compactUsage(u: Usage): string {
-  return `in ${u.input} · out ${u.output}${u.cacheRead ? ` · c ${u.cacheRead}` : ''}`;
-}
-
 interface SidebarRow {
   text?: string;
-  color?: 'yellow' | 'red' | 'cyan';
+  color?: 'yellow' | 'red' | 'cyan' | 'green';
   dim?: boolean;
   bold?: boolean;
   /** Status row: live ●/spinner prefix, kept at the bottom of the sidebar. */
@@ -134,10 +131,12 @@ function sidebarContent(
   const contentW = width - 4; // '│ ' + content + ' │'
   const rows: SidebarRow[] = [
     { text: `RingZero · ${cwdName}`, bold: true },
-    { text: '' },
-    { text: 'model', dim: true },
+    { text: '', dim: true },
     { text: model, color: 'cyan', bold: true },
-    ...(sessionId ? [{ text: `session ${sessionId.slice(0, 8)}`, dim: true }] : []),
+    ...(sessionId ? [{ text: `${sessionId.slice(0, 20)}`, dim: true }] : []),
+    ...(state.flash && Date.now() - state.flash.at < FLASH_MS
+      ? [{ text: `✓ ${state.flash.text}`, color: 'green' as const, bold: true }]
+      : []),
   ];
   if (state.planMode || state.yolo || state.pendingImage) {
     rows.push({ text: '' });
@@ -159,22 +158,35 @@ function sidebarContent(
   const totalUsage = state.totalUsage;
   if (usage || totalUsage) {
     rows.push({ text: '' });
-    if (usage) rows.push({ text: `last ${compactUsage(usage)}`, dim: true });
+    rows.push({ text: 'Token Flow (in · out)', dim: true });
+    if (usage) rows.push({ text: ` Last: ${usage.input} · ${usage.output}`, dim: true });
     if (totalUsage) {
-      rows.push({ text: `sess ${compactUsage(totalUsage)}`, dim: true });
+      rows.push({ text: `Total: ${totalUsage.input} · ${totalUsage.output}`, dim: true });
       rows.push({
         text: `${Math.round(cacheHitRate(totalUsage) * 100)}% cached · ≈${fmtCost(estimateCost(model, totalUsage))}`,
         dim: true,
       });
     }
   }
-  // The status line lives here instead of a full-width bottom bar.
-  const sc = state.scroll > 0 ? `  · ↑${state.scroll} ${visible}/${total}` : '';
-  const focus = state.transcriptFocus ? '  · ↑/↓ scroll · Esc to input' : '';
-  const status: SidebarRow = { text: state.status + sc + focus, spinner: true };
+  // Status area pinned at the bottom of the sidebar: the live ●/spinner, the
+  // status text, the scroll hint and the transcript-focus hint each on their
+  // own row.
+  const statusRows: SidebarRow[] = [
+    { text: '', dim: true },
+    { text: state.status, dim: true, spinner: true  },
+  ];
+  if (state.scroll > 0)
+    statusRows.push({ text: `↑${state.scroll} ${visible}/${total}`, dim: true });
+  if (state.transcriptFocus){
+    statusRows.push({ text: 'Esc to input', dim: true });
+  }
 
   const avail = Math.max(1, height - 2);
-  const visibleRows = [...rows.slice(0, Math.max(0, avail - 1)), status].slice(0, avail);
+  // Status rows stay pinned at the bottom; body rows are trimmed from the tail
+  // when there isn't enough room.
+  const nStatus = Math.min(statusRows.length, avail);
+  const body = rows.slice(0, Math.max(0, avail - nStatus));
+  const visibleRows = [...body, ...statusRows.slice(0, nStatus)].slice(0, avail);
   return { visibleRows, avail, contentW };
 }
 

@@ -1,9 +1,9 @@
 /** Reasoning-effort levels understood by RingZero (EFFORT / RINGZERO_EFFORT). */
-export type EffortLevel = 'low' | 'medium' | 'high';
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
 
 /** Parse an EFFORT env value into a known level; empty/unknown → undefined. */
 export function effortLevel(v: string | undefined): EffortLevel | undefined {
-  if (v === 'low' || v === 'medium' || v === 'high') return v;
+  if (v === 'low' || v === 'medium' || v === 'high' || v === 'max') return v;
   return undefined;
 }
 
@@ -19,6 +19,8 @@ export function effortBudgetTokens(effort: EffortLevel | undefined): number | un
       return 8192;
     case 'high':
       return 16384;
+    case 'max':
+      return 32768;
     default:
       return undefined;
   }

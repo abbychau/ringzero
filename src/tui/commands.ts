@@ -161,7 +161,7 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
         list.map((s) => ({
           label: s.title || s.id,
           value: s.id,
-          hint: new Date(s.updated).toISOString().slice(0, 19).replace('T', ' '),
+          hint: `${s.id} · ${new Date(s.updated).toISOString().slice(0, 19).replace('T', ' ')}`,
         })),
       );
       if (v) {

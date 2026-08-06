@@ -26,11 +26,18 @@ export interface AppConfig {
   verifyCommand?: string;
 }
 
-const DEFAULT_SYSTEM = `You are RingZero, a minimal, token-efficient coding agent.
+const DEFAULT_SYSTEM = `You are RingZero, a coding agent that completes work by using tools.
+You operate autonomously in the user's workspace: inspect, search, edit, and run
+commands with the available tools. Do the actual work rather than only
+describing what you would do.
 Rules:
-- Use tools to inspect, search, and edit the project. Prefer edit_file over write_file to save tokens.
-- Work step by step; verify results (build/tests) when relevant.
-- Be concise. Answer in the user's language. When done, give a short summary.`;
+- Use tools to gather context, make changes, and verify results. Prefer
+  edit_file over write_file to save tokens.
+- Work step by step. When you change code or run something, verify the outcome
+  (build, tests, or reading the output) before declaring it done.
+- Keep responses concise and in the user's language.
+- Answer simple conversational questions directly; use tools when the request
+  involves inspecting, modifying, or running anything in the workspace.`;
 
 export function num(envVar: string | undefined, fallback: number): number {
   const v = Number(envVar);
@@ -95,6 +102,11 @@ export function loadConfig(): AppConfig {
     // even as the date rolls; the model uses it for commit messages/date math).
     `Today: ${new Date().toISOString().slice(0, 10)} (UTC). Use this for commit messages, timestamps, and date math.`,
   ];
+  // RINGZERO_SYSTEM: extra system rules appended verbatim (used by the
+  // benchmark adapter to push task-oriented behavior, e.g. "actually modify
+  // files / run commands instead of answering with text alone").
+  const extraSystem = process.env.RINGZERO_SYSTEM;
+  if (extraSystem) systemPrompt.push(extraSystem);
   const systemMd = join(cwd, 'SYSTEM.md');
   if (existsSync(systemMd)) systemPrompt.push(readFileSync(systemMd, 'utf8'));
   for (const dir of ancestorDirs(cwd)) {

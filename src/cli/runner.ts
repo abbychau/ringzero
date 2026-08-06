@@ -51,6 +51,12 @@ export interface RunnerOptions {
   planMode?: boolean;
   /** Yolo mode: auto-allow every permission check (CLI wins over env, then prefs). */
   yolo?: boolean;
+  /**
+   * Task mode: autonomous execution for one-shot/benchmark runs. Implies
+   * requireToolUse (text-only answers before any tool are bounced back),
+   * removes ask_user (can't interrupt), and auto-allows every tool.
+   */
+  taskMode?: boolean;
 }
 
 /** Wires config + store + tools + provider into a runnable Agent, per session. */
@@ -65,6 +71,8 @@ export class Runner {
   private todosDir: string;
   private todos: TodoItem[] = [];
   private planMode: boolean;
+  private requireToolUse: boolean;
+  private taskMode: boolean;
   private enabledSkills: string[] = [];
   private mcpTools: Tool[] = [];
   private mcpInited = false;
@@ -92,6 +100,20 @@ export class Runner {
     this.planMode =
       opts.planMode ??
       (process.env.RINGZERO_PLAN_MODE === '1' || process.env.RINGZERO_PLAN_MODE === 'true');
+    // Task mode (RINGZERO_TASK_MODE / TASK_MODE, or --task) is the first-class
+    // "autonomous task" mode: it bundles requireToolUse, removes ask_user, and
+    // auto-allows tools — the same guarantees other harnesses get from their
+    // task-oriented system prompt + loop design, without per-flag hacks.
+    this.taskMode =
+      opts.taskMode ??
+      (process.env.RINGZERO_TASK_MODE === '1' ||
+        process.env.RINGZERO_TASK_MODE === 'true' ||
+        process.env.TASK_MODE === '1' ||
+        process.env.TASK_MODE === 'true');
+    this.requireToolUse =
+      this.taskMode ||
+      process.env.RINGZERO_REQUIRE_TOOL === '1' ||
+      process.env.RINGZERO_REQUIRE_TOOL === 'true';
     this.prefsPaths = {
       project: join(config.cwd, '.ringzero', 'config.json'),
       global: join(config.ringzeroHome, 'config.json'),
@@ -108,7 +130,8 @@ export class Runner {
       this.gate.setOverride(name, rule);
     }
     // Yolo mode: CLI --yolo > env YOLO > persisted prefs (/yolo toggle).
-    this.gate.setYolo(opts.yolo ?? config.env.yolo ?? prefs.yolo);
+    // Task mode implies yolo (autonomous runs auto-allow every tool).
+    this.gate.setYolo(this.taskMode || opts.yolo || config.env.yolo || prefs.yolo);
     // Housekeeping: archive old/excess sessions (env-tunable, off by default
     // except for the 50-session cap). Never archives the session being resumed.
     this.store.prune({
@@ -169,6 +192,7 @@ export class Runner {
       preserveRecentTokens: this.config.preserveRecentTokens,
       maxSteps: this.config.maxSteps,
       planMode: this.planMode,
+      requireToolUse: this.requireToolUse,
       signal,
       promptUser: this.promptUserFn,
       onBeforeTool: async (name, args) => {
@@ -225,7 +249,8 @@ export class Runner {
     const searchKey = process.env.RINGZERO_SEARCH_KEY?.trim();
     const tools = [
       ...defaultTools(),
-      askUserTool(),
+      // Task mode is autonomous — no ask_user tool (can't pause for a human).
+      ...(this.taskMode ? [] : [askUserTool()]),
       ...(searchKey
         ? [webSearchTool({ apiKey: searchKey, endpoint: process.env.RINGZERO_SEARCH_ENDPOINT })]
         : []),
@@ -361,6 +386,15 @@ export class Runner {
       sys.push(
         'Plan mode is ON: call the plan tool to present a plan and get approval before any changes. ' +
           'Only read-only tools are allowed until the plan is approved.',
+      );
+    }
+    if (this.taskMode) {
+      sys.push(
+        'You are running in autonomous task mode: complete the requested work end-to-end ' +
+          'using the available tools. Inspect, modify, and verify — do not merely describe ' +
+          'what you would do. Do not declare the task done until you have created the required ' +
+          'output artifacts and verified them (run programs / check outputs). If a test or ' +
+          'verification script exists, run it against your work.',
       );
     }
     for (const name of this.enabledSkills) {

@@ -14,7 +14,7 @@ export interface Env {
   anthropicApiKey?: string;
   anthropicModel?: string;
   geminiApiKey?: string;
-  /** Reasoning effort (EFFORT / RINGZERO_EFFORT): low/medium/high. */
+  /** Reasoning effort (EFFORT / RINGZERO_EFFORT): low/medium/high/max. */
   effort?: EffortLevel;
   /** Yolo mode (YOLO / RINGZERO_YOLO): auto-allow every permission check. */
   yolo?: boolean;

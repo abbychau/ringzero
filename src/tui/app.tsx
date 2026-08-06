@@ -8,6 +8,7 @@ import { Runner } from '../cli/runner.js';
 import { CONTINUE_PROMPT, type Agent } from '../kernel/agent.js';
 import type { ImageInput } from '../kernel/types.js';
 import {
+  FLASH_MS,
   reducer,
   initial,
   layoutBlocks,
@@ -306,7 +307,9 @@ export function App({
       // Usage/ctx are shown by the StatusBar/sidebar, so idle needs no suffix.
       const finalStatus = status === 'idle' ? 'idle' : status;
       dispatch({ type: 'runEnd', usage, status: finalStatus, ctx });
-      notifyRunComplete(Math.round((performance.now() - t0) / 1000));
+      // No desktop notification for a user-initiated abort (Ctrl+C): the user
+      // already knows the run stopped, so don't pop "RingZero done".
+      if (status !== 'aborted') notifyRunComplete(Math.round((performance.now() - t0) / 1000));
       // Step cap hit and the run wasn't aborted: yolo auto-continues (bounded);
       // otherwise ask whether to keep going. Continuation turns reuse the full
       // history still in context.
@@ -547,19 +550,24 @@ export function App({
     [closeModal, dispatch],
   );
 
+  // Timer for auto-clearing the sidebar "Copied" flash notice.
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   // Copy a selection to the OS clipboard (Ctrl+Y, or Ctrl+C while a
   // selection is active — the standard terminal behavior).
   const copySelection = (sel: Selection): void => {
     const rows = sel.pane === 'sidebar' ? layoutRef.current.sidebarRows : allRows;
     const text = selectionText(rows, sel);
     if (text) {
-      pushSys('copying selection…');
       void copyToClipboard(text).then((ok) => {
-        pushSys(
-          ok
-            ? `copied selection · ${text.length.toLocaleString()} chars to clipboard`
-            : '(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)',
-        );
+        if (ok) {
+          // Transient sidebar toast instead of transcript spam.
+          dispatch({ type: 'flash', text: 'Copied' });
+          if (flashTimer.current) clearTimeout(flashTimer.current);
+          flashTimer.current = setTimeout(() => dispatch({ type: 'clearFlash' }), FLASH_MS);
+        } else {
+          pushSys('(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)');
+        }
       });
     } else {
       pushSys('(empty selection)');
@@ -1081,6 +1089,12 @@ export async function runTui(
     process.stdout.write(SGR_MOUSE_DISABLE);
   };
   mark('render-call');
+  // Anchor the TUI to the top-left of the screen. When launched under
+  // `npm run <script>` (or after leftover output) the cursor sits below row 1,
+  // and if Ink doesn't detect the first frame as fullscreen it renders inline
+  // from the current cursor position — leaving blank rows above the frame.
+  // Clear + home first so the frame always starts at row 1.
+  process.stdout.write('\x1b[2J\x1b[H');
   render(
     <App
       runner={runner}

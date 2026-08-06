@@ -44,6 +44,9 @@ export interface Usage {
   cacheWrite?: number;
 }
 
+/** How long a sidebar flash notice (e.g. "Copied") stays visible, ms. */
+export const FLASH_MS = 1600;
+
 export interface Selection {
   /**
    * Row space the indices refer to: transcript rows or sidebar text lines.
@@ -90,6 +93,8 @@ export interface State {
   todosExpanded: boolean;
   /** Image attached via /image; sent with the next submitted message. */
   pendingImage?: ImageInput;
+  /** Transient toast shown in the sidebar (e.g. "Copied"); auto-cleared after FLASH_MS. */
+  flash?: { text: string; at: number };
 }
 
 export type Action =
@@ -115,6 +120,8 @@ export type Action =
   | { type: 'toggleTodos' }
   | { type: 'setImage'; image?: ImageInput }
   | { type: 'history'; index: number }
+  | { type: 'flash'; text: string }
+  | { type: 'clearFlash' }
   | { type: 'clear' };
 
 export function initial(model: string, planMode = false, yolo = false): State {
@@ -273,6 +280,10 @@ export function reducer(s: State, a: Action): State {
       const input = idx < h.length ? h[idx]! : '';
       return { ...s, input, cursor: input.length, histIdx: idx };
     }
+    case 'flash':
+      return { ...s, flash: { text: a.text, at: Date.now() } };
+    case 'clearFlash':
+      return { ...s, flash: undefined };
     case 'clear':
       return {
         ...s,

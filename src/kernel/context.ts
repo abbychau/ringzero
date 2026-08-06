@@ -72,7 +72,17 @@ function summarizeMessages(prefix: SessionMessage[], prompt: string): any[] {
       if (m.role === 'assistant') {
         return { role: 'assistant', content: m.content };
       }
-      if (m.role === 'tool') return { role: 'tool', toolCallId: m.toolCallId, content: m.content };
+      if (m.role === 'tool') {
+        // Tool-call args are dropped from the assistant message above, so a raw
+        // `tool` role here would be rejected ("tool must be a response to a
+        // preceding message with 'tool_calls'"). Re-emit the result as a user
+        // message to preserve its content for the summary without breaking the
+        // assistant/tool alternation contract.
+        return {
+          role: 'user',
+          content: `[tool ${m.toolName ?? m.toolCallId}]\n${m.content}`,
+        };
+      }
       return { role: m.role, content: m.content };
     }),
     { role: 'user', content: prompt },
@@ -130,6 +140,15 @@ export async function compactHistory(
       if (tailTokens + t > opts.preserveRecentTokens) break;
       tailTokens += t;
       tailStart = i;
+    }
+    // Never split a tool-call/tool-response pairing. If the cut lands on a
+    // `tool` result, back up to include its assistant(tool_calls) message —
+    // otherwise the folded history sends a `tool` message with no preceding
+    // `tool_calls`, which OpenAI-compatible APIs reject with HTTP 400.
+    while (tailStart < current.length && current[tailStart]!.role === 'tool') {
+      let i = tailStart;
+      while (i > 0 && current[i - 1]!.role === 'tool') i--;
+      tailStart = Math.max(0, i - 1);
     }
     const prefix = current.slice(0, tailStart);
     const tail = current.slice(tailStart);

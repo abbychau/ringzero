@@ -107,7 +107,10 @@ test('Sidebar shows header, model, badges, ctx bar, usage, and status', () => {
 });
 
 test('Sidebar pins the status row when too short', () => {
-  const { lastFrame } = render(<Sidebar state={initial('m')} model="m" height={4} cwdName="x" />);
+  // Status area now occupies 2 rows (live ●/spinner + status text), so a tiny
+  // height keeps just those; bump to 5 so the header fits while the status
+  // block is still pinned at the bottom.
+  const { lastFrame } = render(<Sidebar state={initial('m')} model="m" height={5} cwdName="x" />);
   const f = stripAnsi(lastFrame()!);
   assert.ok(f.includes('RingZero · x'), `frame was: ${JSON.stringify(f)}`);
   assert.ok(f.includes('ready'), `frame was: ${JSON.stringify(f)}`);
@@ -204,7 +207,7 @@ test('sidebarTextLines returns selectable text lines with status and padding', (
     `lines: ${JSON.stringify(lines)}`,
   );
   assert.ok(
-    lines.some((l) => l.includes('session abc12345')),
+    lines.some((l) => l.includes('abc12345')),
     `lines: ${JSON.stringify(lines)}`,
   );
   const nonEmpty = lines.filter((l) => l !== '');

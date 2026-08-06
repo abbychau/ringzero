@@ -19,6 +19,9 @@ Usage:
   ringzero --yes "..."          auto-allow all tools (scripted mode)
   ringzero --yolo "..."         yolo mode: never prompt, all tools auto-allowed
                                 (also YOLO=1 in .env, or /yolo in TUI/REPL)
+  ringzero --task "..."         autonomous task mode: complete work end-to-end with
+                                tools, no ask_user, all tools auto-allowed
+                                (also RINGZERO_TASK_MODE=1 in .env)
   ringzero --image <path> "..." attach an image to the prompt (repeatable)
   ringzero --version            print version
   ringzero --doctor             environment self-check (exit 1 on problems)
@@ -46,6 +49,7 @@ const args = process.argv.slice(2);
 let json = false;
 let yes = false;
 let yolo = false;
+let task = false;
 let resume: string | undefined;
 let model: string | undefined;
 let listSessions = false;
@@ -63,6 +67,7 @@ for (let i = 0; i < args.length; i++) {
   if (a === '--json') json = true;
   else if (a === '--yes' || a === '-y') yes = true;
   else if (a === '--yolo' || a === '-Y') yolo = true;
+  else if (a === '--task') task = true;
   else if (a === '--resume' || a === '-c') resume = args[++i];
   else if (a === '--model') model = args[++i];
   else if (a === '--sessions') listSessions = true;
@@ -75,7 +80,13 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--version' || a === '-v') version = true;
   else if (a === '--repl') tui = false;
   else if (a === '--tui') tui = true;
-  else if (a === '--help' || a === '-h') {
+  else if (a === '--') {
+    // POSIX convention: everything after `--` is a positional, so prompts
+    // that start with '-' (e.g. markdown bullet lists) are not misread as
+    // flags.
+    positionals.push(...args.slice(i + 1));
+    break;
+  } else if (a === '--help' || a === '-h') {
     printHelp();
     process.exit(0);
   } else if (a.startsWith('-')) {
@@ -88,6 +99,10 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const config = loadConfig();
+
+// --task sets autonomous task mode via env so every entry point (TUI/REPL/
+// one-shot/watch/RPC) that constructs a Runner picks it up uniformly.
+if (task) process.env.RINGZERO_TASK_MODE = '1';
 
 if (doctor) {
   const { runDoctor } = await import('./doctor.js');
