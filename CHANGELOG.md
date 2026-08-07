@@ -5,6 +5,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-08-08
+
+### Added
+
+- `ringzero --update`: self-update to the latest GitHub release — detects
+  how the running copy was installed (Windows SFX exe / macOS-Linux
+  portable dir), compares versions against the GitHub Releases `latest`
+  endpoint, downloads the matching asset and swaps it in place (rename-swap
+  on Windows, dir swap on POSIX; detached cleanup of the old binary). No
+  Node/npm needed at runtime. Ships a zero-dependency zip reader
+  (`src/util/unzip.ts`, store + deflate, CRC-32 verify, zip-slip guard).
+  `src/cli/update.ts`.
+- First-run setup wizard: when no API key is configured, `ringzero` walks
+  the user through provider setup (DeepSeek? → API URL / key / model) and
+  applies the recommended tuning automatically (`EFFORT=max`,
+  `CONTEXT_BUDGET=1000000`, `MAX_STEPS=100`, `YOLO=1`) for DeepSeek.
+  `src/cli/setup.ts`.
+- User-level settings: `.env` is now read from `~/.ringzero/.env`
+  (override with `RINGZERO_HOME`), written by the wizard, with priority
+  `~/.env` → `~/.ringzero/.env` → `<cwd>/.env` → real env vars.
+  `src/config/env.ts`.
+- Homepage: "Already installed? Update with `ringzero --update`" note and
+  README "Update" section (`site/index.html`, `README.md`).
+
 ## [0.4.1] - 2026-08-08
 
 ### Added

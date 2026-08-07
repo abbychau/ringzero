@@ -25,12 +25,13 @@ Usage:
   ringzero --image <path> "..." attach an image to the prompt (repeatable)
   ringzero --version            print version
   ringzero --doctor             environment self-check (exit 1 on problems)
+  ringzero --update             self-update to the latest GitHub release
 
 TUI keys: Enter submit · PgUp/PgDn or mouse wheel scroll
          ↑/↓ history (transcript focus: ↑/↓ scroll · Esc returns to input)
          drag with mouse to select · Shift+↑/↓ extend · Ctrl+Y copy selection
          Ctrl+C abort/exit · Enter while running injects into the active run
-Env (.env or environment):
+Env (~/.ringzero/.env, ./.env, or environment):
   API_URL, API_KEY, MODEL          OpenAI-compatible endpoint (packyapi etc.)
   ANTHROPIC_API_KEY, ANTHROPIC_MODEL   Anthropic (used when API_URL is empty)
   GEMINI_API_KEY, GEMINI_MODEL     Gemini (used when API_URL is empty)
@@ -59,6 +60,7 @@ let rpc = false;
 let tui = true;
 let watch = false;
 let doctor = false;
+let update = false;
 const positionals: string[] = [];
 const imagePaths: string[] = [];
 
@@ -75,6 +77,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--rpc') rpc = true;
   else if (a === '--watch') watch = true;
   else if (a === '--doctor') doctor = true;
+  else if (a === '--update') update = true;
   else if (a === '--verbose') process.env.RINGZERO_VERBOSE = '1';
   else if (a === '--image') imagePaths.push(args[++i] ?? '');
   else if (a === '--version' || a === '-v') version = true;
@@ -98,67 +101,94 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-const config = loadConfig();
+let config = loadConfig();
 
 // --task sets autonomous task mode via env so every entry point (TUI/REPL/
 // one-shot/watch/RPC) that constructs a Runner picks it up uniformly.
 if (task) process.env.RINGZERO_TASK_MODE = '1';
 
-if (doctor) {
-  const { runDoctor } = await import('./doctor.js');
-  process.exit(runDoctor(config));
-}
-
-if (cont && !resume) {
-  const { SessionStore } = await import('../session/store.js');
-  resume = new SessionStore(config.sessionsDir).list()[0]?.id;
-}
-
-if (version) {
-  const { readFileSync } = await import('node:fs');
-  const pkg = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
-  console.log(`ringzero ${pkg.version ?? '0.0.0'}`);
-  process.exit(0);
-}
-
-if (listSessions) {
-  const { SessionStore } = await import('../session/store.js');
-  const store = new SessionStore(config.sessionsDir);
-  const list = store.list();
-  if (!list.length) {
-    console.log('(no sessions)');
-  } else {
-    for (const s of list.slice(0, 20)) {
-      const when = new Date(s.updated).toISOString().slice(0, 19).replace('T', ' ');
-      console.log(`${s.id}  ${when}  ${s.title}`);
-    }
+app: {
+  if (doctor) {
+    const { runDoctor } = await import('./doctor.js');
+    process.exit(runDoctor(config));
   }
-  process.exit(0);
-}
 
-const prompt = positionals.join(' ');
+  if (update) {
+    // Set the exit code and let the event loop drain instead of calling
+    // process.exit() — undici (fetch) leaves handles open that crash
+    // process.exit() on Windows (libuv `UV_HANDLE_CLOSING` assert).
+    const { runUpdate } = await import('./update.js');
+    process.exitCode = await runUpdate();
+    break app;
+  }
 
-const images =
-  imagePaths.length > 0 ? (await import('../util/image.js')).loadImages(imagePaths) : undefined;
+  if (cont && !resume) {
+    const { SessionStore } = await import('../session/store.js');
+    resume = new SessionStore(config.sessionsDir).list()[0]?.id;
+  }
 
-try {
-  if (prompt) {
-    if (watch) {
-      const { runWatch } = await import('./watch.js');
-      await runWatch(config, prompt, { model, yes, yolo });
+  if (version) {
+    const { readFileSync } = await import('node:fs');
+    const pkg = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
+    console.log(`ringzero ${pkg.version ?? '0.0.0'}`);
+    process.exit(0);
+  }
+
+  if (listSessions) {
+    const { SessionStore } = await import('../session/store.js');
+    const store = new SessionStore(config.sessionsDir);
+    const list = store.list();
+    if (!list.length) {
+      console.log('(no sessions)');
     } else {
-      await runOneShot(config, prompt, { resume, yes, yolo, model, json, images });
+      for (const s of list.slice(0, 20)) {
+        const when = new Date(s.updated).toISOString().slice(0, 19).replace('T', ' ');
+        console.log(`${s.id}  ${when}  ${s.title}`);
+      }
     }
-  } else if (rpc) {
-    const { runRpc } = await import('./rpc.js');
-    await runRpc(config, { model, yolo });
-  } else if (tui && process.stdin.isTTY && process.stdout.isTTY) {
-    const { runTui } = await import('../tui/app.js');
-    await runTui(config, model, resume, yolo);
-  } else {
-    await runRepl(config, model, resume, yolo);
+    process.exit(0);
   }
-} catch (e) {
-  console.error(`\n[error] ${e instanceof Error ? e.message : String(e)}`);
-  process.exit(1);
-}
+
+  // First-run guide: no API key configured → walk the user through setting up
+  // .env (API URL/key/model + optional DeepSeek tuning) before entering the
+  // session. Machine modes (--json/--rpc) and non-interactive shells skip it.
+  if (
+    !config.env.apiKey &&
+    !config.env.anthropicApiKey &&
+    !config.env.geminiApiKey &&
+    !json &&
+    !rpc &&
+    process.stdin.isTTY &&
+    process.stdout.isTTY
+  ) {
+    const { runSetup } = await import('./setup.js');
+    if (await runSetup(config.ringzeroHome)) config = loadConfig();
+  }
+
+  const prompt = positionals.join(' ');
+
+  const images =
+    imagePaths.length > 0 ? (await import('../util/image.js')).loadImages(imagePaths) : undefined;
+
+  try {
+    if (prompt) {
+      if (watch) {
+        const { runWatch } = await import('./watch.js');
+        await runWatch(config, prompt, { model, yes, yolo });
+      } else {
+        await runOneShot(config, prompt, { resume, yes, yolo, model, json, images });
+      }
+    } else if (rpc) {
+      const { runRpc } = await import('./rpc.js');
+      await runRpc(config, { model, yolo });
+    } else if (tui && process.stdin.isTTY && process.stdout.isTTY) {
+      const { runTui } = await import('../tui/app.js');
+      await runTui(config, model, resume, yolo);
+    } else {
+      await runRepl(config, model, resume, yolo);
+    }
+  } catch (e) {
+    console.error(`\n[error] ${e instanceof Error ? e.message : String(e)}`);
+    process.exit(1);
+  }
+} // app

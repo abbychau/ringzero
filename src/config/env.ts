@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { effortLevel, type EffortLevel } from '../providers/effort.js';
 
 /**
- * Environment config. Loads .env from cwd (then user home) without overriding
- * existing process.env vars (so real env vars take precedence). Never logs the key.
+ * Environment config. Loads .env from ~/.env, then ~/.ringzero/.env (user-level
+ * settings), then <cwd>/.env (project-level overrides), without overriding
+ * existing process.env vars (so real env vars always win). Never logs the key.
  */
 export interface Env {
   apiUrl: string;
@@ -20,14 +21,15 @@ export interface Env {
   yolo?: boolean;
 }
 
-export function loadDotEnv(dir: string): void {
+/** Load `<dir>/.env` into process.env. `protected` keys (real env vars) are never overridden. */
+export function loadDotEnv(dir: string, protectedKeys?: ReadonlySet<string>): void {
   const p = join(dir, '.env');
   if (!existsSync(p)) return;
   for (const line of readFileSync(p, 'utf8').split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
     if (!m) continue;
     const key = m[1]!;
-    if (key in process.env) continue;
+    if (protectedKeys?.has(key)) continue;
     let val = m[2]!.trim();
     if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
@@ -43,8 +45,14 @@ export function envBool(v: string | undefined): boolean | undefined {
 }
 
 export function loadEnv(cwd = process.cwd()): Env {
-  loadDotEnv(cwd);
-  loadDotEnv(homedir());
+  // Priority (lowest → highest): ~/.env → ~/.ringzero/.env → <cwd>/.env → real env.
+  // loadDotEnv takes a DIRECTORY and appends `.env` itself. Real env vars (present
+  // before any .env load) are protected and always win over every .env file.
+  const ringzeroHome = process.env.RINGZERO_HOME ?? join(homedir(), '.ringzero');
+  const realKeys = new Set(Object.keys(process.env));
+  loadDotEnv(homedir(), realKeys);
+  loadDotEnv(ringzeroHome, realKeys);
+  loadDotEnv(cwd, realKeys);
   return {
     apiUrl: process.env.API_URL ?? 'https://api.openai.com/v1',
     apiKey: process.env.API_KEY ?? '',

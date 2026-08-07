@@ -153,6 +153,35 @@ npm run build:sfx                         # (Windows) → build/portable/ringzer
 
 Only the build machine needs Node ≥ 20 and npm; end users need neither.
 
+## Update
+
+Already installed? Get the latest release with the built-in self-updater:
+
+```bash
+ringzero --update        # checks the latest GitHub release and replaces
+                         # the installed binary in place
+```
+
+It detects how you installed (Windows SFX exe or the macOS/Linux portable
+dir), downloads the matching asset, and swaps it in — no admin needed. If it
+can't self-update (dev checkout, ad-hoc copy), it prints the one-line
+installer for your OS instead.
+
+You can also just re-run the installer — it always fetches the latest release:
+
+```powershell
+# Windows
+irm https://ringzero.abby.md/install.ps1 | iex
+```
+
+```bash
+# macOS / Linux
+curl -fsSL https://ringzero.abby.md/install.sh | sh
+```
+
+For a dev checkout, pull and rebuild instead:
+`git pull && npm install && npm run build`.
+
 ## How to run & test
 
 ```bash
