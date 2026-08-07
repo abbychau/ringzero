@@ -93,7 +93,7 @@ npm test               # build + node --test
 ### Windows: one-line installer (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/abbychau/ringzero/main/install.ps1 | iex
+irm https://ringzero.abby.md/install.ps1 | iex
 ringzero
 ```
 
