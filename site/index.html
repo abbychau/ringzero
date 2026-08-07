@@ -164,23 +164,94 @@
         flex-wrap: wrap;
       }
 
-      .hero .install {
+      [hidden] {
+        display: none !important;
+      }
+
+      .hero .install-box {
         margin: 30px auto 0;
-        display: inline-block;
+        max-width: 660px;
+        text-align: left;
+      }
+
+      .hero .install-tabs {
+        display: flex;
+        gap: 4px;
+        margin-bottom: -1px;
+      }
+
+      .hero .install-tabs .tab {
+        font: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 7px 18px;
+        background: var(--panel);
+        color: var(--muted);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-radius: 6px 6px 0 0;
+        cursor: pointer;
+      }
+
+      .hero .install-tabs .tab:hover {
+        color: var(--text);
+      }
+
+      .hero .install-tabs .tab.active {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .hero .install {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
         font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
         font-size: 14px;
         background: var(--panel);
         border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 11px 18px;
+        border-radius: 0 8px 8px 8px;
+        padding: 12px 14px;
         color: var(--text);
+      }
+
+      .hero .install .cmd {
+        overflow-x: auto;
+        white-space: nowrap;
         user-select: all;
       }
 
       .hero .install .ps {
-        color: var(--accent);
+        color: var(--muted);
         font-weight: 600;
         margin-right: 10px;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      .hero .copy-btn {
+        flex: none;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 5px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--muted);
+        cursor: pointer;
+        white-space: nowrap;
+      }
+
+      .hero .copy-btn:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+
+      .hero .copy-btn.copied {
+        color: var(--accent);
+        border-color: var(--accent);
       }
 
       .hero .install-note {
@@ -579,6 +650,15 @@
           overflow-wrap: anywhere;
           text-align: left;
         }
+        .hero .install .cmd {
+          display: block;
+          white-space: normal;
+          overflow-wrap: anywhere;
+          margin-bottom: 8px;
+        }
+        .hero .copy-btn {
+          display: inline-block;
+        }
         .hero .install-note {
           font-size: 12px;
         }
@@ -619,12 +699,27 @@
           </span>
           <h1>RingZero<span class="dot">.</span></h1>
 
-          <div class="install" aria-label="Install RingZero on Windows">
-            <span class="ps">PS&gt;</span>irm
-            https://raw.githubusercontent.com/abbychau/ringzero/main/install.ps1 | iex
+          <div class="install-box" aria-label="Install RingZero">
+            <div class="install-tabs" role="tablist" aria-label="Operating system">
+              <button class="tab active" data-os="windows" role="tab" aria-selected="true">Windows</button>
+              <button class="tab" data-os="macos" role="tab" aria-selected="false">macOS</button>
+              <button class="tab" data-os="linux" role="tab" aria-selected="false">Linux</button>
+            </div>
+            <div class="install" data-os="windows" role="tabpanel">
+              <span class="cmd"><span class="ps">PS&gt;</span>irm https://raw.githubusercontent.com/abbychau/ringzero/main/install.ps1 | iex</span>
+              <button class="copy-btn" data-copy="irm https://raw.githubusercontent.com/abbychau/ringzero/main/install.ps1 | iex">Copy</button>
+            </div>
+            <div class="install" data-os="macos" role="tabpanel" hidden>
+              <span class="cmd"><span class="ps">$</span>curl -fsSL https://raw.githubusercontent.com/abbychau/ringzero/main/install.sh | sh</span>
+              <button class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/abbychau/ringzero/main/install.sh | sh">Copy</button>
+            </div>
+            <div class="install" data-os="linux" role="tabpanel" hidden>
+              <span class="cmd"><span class="ps">$</span>curl -fsSL https://raw.githubusercontent.com/abbychau/ringzero/main/install.sh | sh</span>
+              <button class="copy-btn" data-copy="curl -fsSL https://raw.githubusercontent.com/abbychau/ringzero/main/install.sh | sh">Copy</button>
+            </div>
           </div>
           <p class="install-note">
-            Windows one-line install &middot; no admin needed &middot; then run
+            One-line install &middot; no admin needed &middot; then run
             <code>ringzero</code>
           </p>
 
@@ -820,5 +915,64 @@ npm link
         </nav>
       </div>
     </footer>
+
+    <script>
+      (function () {
+        // install tabs
+        var tabs = document.querySelectorAll('.install-tabs .tab');
+        var boxes = document.querySelectorAll('.install[data-os]');
+        tabs.forEach(function (tab) {
+          tab.addEventListener('click', function () {
+            tabs.forEach(function (t) {
+              t.classList.remove('active');
+              t.setAttribute('aria-selected', 'false');
+            });
+            tab.classList.add('active');
+            tab.setAttribute('aria-selected', 'true');
+            var os = tab.getAttribute('data-os');
+            boxes.forEach(function (b) {
+              b.hidden = b.getAttribute('data-os') !== os;
+            });
+          });
+        });
+
+        // copy buttons
+        function copyText(text, btn) {
+          function done() {
+            var prev = btn.textContent;
+            btn.textContent = 'Copied';
+            btn.classList.add('copied');
+            setTimeout(function () {
+              btn.textContent = prev;
+              btn.classList.remove('copied');
+            }, 1600);
+          }
+          function fallback() {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+              document.execCommand('copy');
+              done();
+            } catch (e) {}
+            document.body.removeChild(ta);
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done, fallback);
+          } else {
+            fallback();
+          }
+        }
+
+        document.querySelectorAll('.copy-btn').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            copyText(btn.getAttribute('data-copy'), btn);
+          });
+        });
+      })();
+    </script>
   </body>
 </html>
