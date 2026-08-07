@@ -5,7 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-08
+
 ### Added
+
+- macOS / Linux one-line installer (`install.sh`): detects platform + arch,
+  downloads the matching `ringzero-<platform>-<arch>.zip` from GitHub
+  Releases, installs under `~/.local/share/ringzero`, symlinks
+  `~/.local/bin/ringzero`, and adds it to PATH (no sudo needed). Mirrors
+  `install.ps1` for Windows.
+- Homepage install box: Windows / macOS / Linux tabs, per-OS copy button
+  (copies the clean command without the shell prompt), and a
+  non-selectable `PS>` / `$` prompt prefix (`site/index.html`).
+- `EFFORT=max`: `reasoning_effort="max"` for OpenAI-compat providers and a
+  32768-token thinking budget for Anthropic/Gemini — previously `max` was
+  silently ignored (`src/providers/effort.ts`).
+- Terminal-Bench 2.0 benchmark results on the homepage: 71/89 (80%)
+  pass@1 best-of-N with deepseek-v4-flash — 164.6M input / 3.4M output
+  tokens, 2,661-token measured per-call overhead, official-leaderboard
+  comparison (`site/index.html`).
+- TUI right sidebar (opencode-style): header (`RingZero · <dir>`), model,
 
 - TUI right sidebar (opencode-style): header (`RingZero · <dir>`), model,
   session id, mode badges (`[plan]`/`[yolo]`/`[img]`), live context-budget
