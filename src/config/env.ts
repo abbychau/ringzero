@@ -4,9 +4,14 @@ import { join } from 'node:path';
 import { effortLevel, type EffortLevel } from '../providers/effort.js';
 
 /**
- * Environment config. Loads .env from ~/.env, then ~/.ringzero/.env (user-level
- * settings), then <cwd>/.env (project-level overrides), without overriding
- * existing process.env vars (so real env vars always win). Never logs the key.
+ * Environment config. Loads .env from ~/.ringzero/.env (user-level settings)
+ * and, when an explicit env file is given (CLI `--env <path>`), from that file
+ * too — WITHOUT overriding existing process.env vars (so real env vars always
+ * win). Never logs the key.
+ *
+ * Working-directory .env files are intentionally NOT loaded: a foreign .env
+ * (e.g. another project's `API_KEY=...`) would silently override config or
+ * suppress the first-run setup wizard. Opt in explicitly with `--env`.
  */
 export interface Env {
   apiUrl: string;
@@ -23,9 +28,13 @@ export interface Env {
 
 /** Load `<dir>/.env` into process.env. `protected` keys (real env vars) are never overridden. */
 export function loadDotEnv(dir: string, protectedKeys?: ReadonlySet<string>): void {
-  const p = join(dir, '.env');
-  if (!existsSync(p)) return;
-  for (const line of readFileSync(p, 'utf8').split(/\r?\n/)) {
+  loadEnvFile(join(dir, '.env'), protectedKeys);
+}
+
+/** Load a specific env file into process.env. Missing files are a no-op. */
+export function loadEnvFile(file: string, protectedKeys?: ReadonlySet<string>): void {
+  if (!existsSync(file)) return;
+  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/);
     if (!m) continue;
     const key = m[1]!;
@@ -44,15 +53,17 @@ export function envBool(v: string | undefined): boolean | undefined {
   return ['1', 'true', 'yes', 'on'].includes(v.trim().toLowerCase());
 }
 
-export function loadEnv(cwd = process.cwd()): Env {
-  // Priority (lowest → highest): ~/.env → ~/.ringzero/.env → <cwd>/.env → real env.
-  // loadDotEnv takes a DIRECTORY and appends `.env` itself. Real env vars (present
-  // before any .env load) are protected and always win over every .env file.
+/**
+ * Load env vars. Priority (lowest → highest): ~/.ringzero/.env → --env file →
+ * real env. Real env vars (present before any .env load) are protected and
+ * always win over every .env file. `envFile` is an explicit path from the
+ * CLI `--env <path>` flag.
+ */
+export function loadEnv(envFile?: string): Env {
   const ringzeroHome = process.env.RINGZERO_HOME ?? join(homedir(), '.ringzero');
   const realKeys = new Set(Object.keys(process.env));
-  loadDotEnv(homedir(), realKeys);
   loadDotEnv(ringzeroHome, realKeys);
-  loadDotEnv(cwd, realKeys);
+  if (envFile) loadEnvFile(envFile, realKeys);
   return {
     apiUrl: process.env.API_URL ?? 'https://api.openai.com/v1',
     apiKey: process.env.API_KEY ?? '',

@@ -23,6 +23,7 @@ Usage:
                                 tools, no ask_user, all tools auto-allowed
                                 (also RINGZERO_TASK_MODE=1 in .env)
   ringzero --image <path> "..." attach an image to the prompt (repeatable)
+  ringzero --env <path>         load an explicit .env file (e.g. --env .env)
   ringzero --version            print version
   ringzero --doctor             environment self-check (exit 1 on problems)
   ringzero --update             self-update to the latest GitHub release
@@ -31,7 +32,7 @@ TUI keys: Enter submit · PgUp/PgDn or mouse wheel scroll
          ↑/↓ history (transcript focus: ↑/↓ scroll · Esc returns to input)
          drag with mouse to select · Shift+↑/↓ extend · Ctrl+Y copy selection
          Ctrl+C abort/exit · Enter while running injects into the active run
-Env (~/.ringzero/.env, ./.env, or environment):
+Env (~/.ringzero/.env or environment; --env <path> loads a specific .env):
   API_URL, API_KEY, MODEL          OpenAI-compatible endpoint (packyapi etc.)
   ANTHROPIC_API_KEY, ANTHROPIC_MODEL   Anthropic (used when API_URL is empty)
   GEMINI_API_KEY, GEMINI_MODEL     Gemini (used when API_URL is empty)
@@ -60,6 +61,7 @@ let rpc = false;
 let tui = true;
 let watch = false;
 let doctor = false;
+let envFile: string | undefined;
 let update = false;
 const positionals: string[] = [];
 const imagePaths: string[] = [];
@@ -80,6 +82,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === '--update') update = true;
   else if (a === '--verbose') process.env.RINGZERO_VERBOSE = '1';
   else if (a === '--image') imagePaths.push(args[++i] ?? '');
+  else if (a === '--env') envFile = args[++i];
   else if (a === '--version' || a === '-v') version = true;
   else if (a === '--repl') tui = false;
   else if (a === '--tui') tui = true;
@@ -101,7 +104,7 @@ for (let i = 0; i < args.length; i++) {
   }
 }
 
-let config = loadConfig();
+let config = loadConfig(envFile);
 
 // --task sets autonomous task mode via env so every entry point (TUI/REPL/
 // one-shot/watch/RPC) that constructs a Runner picks it up uniformly.
@@ -162,7 +165,7 @@ app: {
     process.stdout.isTTY
   ) {
     const { runSetup } = await import('./setup.js');
-    if (await runSetup(config.ringzeroHome)) config = loadConfig();
+    if (await runSetup(config.ringzeroHome)) config = loadConfig(envFile);
   }
 
   const prompt = positionals.join(' ');

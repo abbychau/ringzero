@@ -227,7 +227,9 @@ Sessions are stored as JSONL under `~/.ringzero/sessions/` (or `RINGZERO_HOME`).
 ## Usage
 
 ```bash
-# .env (or real env vars)
+# ~/.ringzero/.env (or real env vars; --env <path> loads an explicit .env file)
+# Working-directory .env files are NOT loaded automatically — use --env .env
+# to opt in, so a foreign project's .env can't hijack your config.
 # API_URL=https://www.packyapi.ai/v1
 # API_KEY=sk-...
 # MODEL=deepseek-v4-flash

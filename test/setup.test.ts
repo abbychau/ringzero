@@ -30,8 +30,8 @@ test('readEnvLines returns [] for a missing file', () => {
   assert.deepEqual(readEnvLines('nope-does-not-exist.env'), []);
 });
 
-/** Load env from a temp cwd + RINGZERO_HOME, clearing API env vars first. */
-function loadEnvIsolated(cwd: string, ringzeroHome: string) {
+/** Load env from a temp RINGZERO_HOME, clearing API env vars first. */
+function loadEnvIsolated(ringzeroHome: string, envFile?: string) {
   const prevHome = process.env.RINGZERO_HOME;
   const prevKey = process.env.API_KEY;
   const prevEffort = process.env.EFFORT;
@@ -39,7 +39,7 @@ function loadEnvIsolated(cwd: string, ringzeroHome: string) {
   delete process.env.API_KEY;
   delete process.env.EFFORT;
   try {
-    return loadEnv(cwd);
+    return loadEnv(envFile);
   } finally {
     if (prevHome === undefined) delete process.env.RINGZERO_HOME;
     else process.env.RINGZERO_HOME = prevHome;
@@ -52,25 +52,38 @@ function loadEnvIsolated(cwd: string, ringzeroHome: string) {
 
 test('loadEnv reads user-level ~/.ringzero/.env via RINGZERO_HOME', () => {
   const home = mkdtempSync(join(tmpdir(), 'rz-home-'));
-  const cwd = mkdtempSync(join(tmpdir(), 'rz-cwd-'));
   writeFileSync(join(home, '.env'), 'API_KEY=ringzero-home-key\nEFFORT=max\n');
   try {
-    const env = loadEnvIsolated(cwd, home);
+    const env = loadEnvIsolated(home);
     assert.equal(env.apiKey, 'ringzero-home-key');
     assert.equal(env.effort, 'max');
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('loadEnv ignores a project <cwd>/.env by default (foreign .env safety)', () => {
+  const home = mkdtempSync(join(tmpdir(), 'rz-home2-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'rz-cwd2-'));
+  writeFileSync(join(home, '.env'), 'API_KEY=home-key\n');
+  writeFileSync(join(cwd, '.env'), 'API_KEY=cwd-key\n');
+  try {
+    const env = loadEnvIsolated(home);
+    assert.equal(env.apiKey, 'home-key');
   } finally {
     rmSync(home, { recursive: true, force: true });
     rmSync(cwd, { recursive: true, force: true });
   }
 });
 
-test('loadEnv: project <cwd>/.env overrides ~/.ringzero/.env', () => {
-  const home = mkdtempSync(join(tmpdir(), 'rz-home2-'));
-  const cwd = mkdtempSync(join(tmpdir(), 'rz-cwd2-'));
+test('loadEnv loads an explicit --env file on top of ~/.ringzero/.env', () => {
+  const home = mkdtempSync(join(tmpdir(), 'rz-home3-'));
+  const cwd = mkdtempSync(join(tmpdir(), 'rz-cwd3-'));
   writeFileSync(join(home, '.env'), 'API_KEY=home-key\n');
   writeFileSync(join(cwd, '.env'), 'API_KEY=cwd-key\n');
   try {
-    const env = loadEnvIsolated(cwd, home);
+    // --env points at the cwd .env explicitly → it IS loaded and wins.
+    const env = loadEnvIsolated(home, join(cwd, '.env'));
     assert.equal(env.apiKey, 'cwd-key');
   } finally {
     rmSync(home, { recursive: true, force: true });
@@ -79,22 +92,19 @@ test('loadEnv: project <cwd>/.env overrides ~/.ringzero/.env', () => {
 });
 
 test('loadEnv: real process.env wins over all .env files', () => {
-  const home = mkdtempSync(join(tmpdir(), 'rz-home3-'));
-  const cwd = mkdtempSync(join(tmpdir(), 'rz-cwd3-'));
+  const home = mkdtempSync(join(tmpdir(), 'rz-home4-'));
   writeFileSync(join(home, '.env'), 'API_KEY=home-key\n');
-  writeFileSync(join(cwd, '.env'), 'API_KEY=cwd-key\n');
   const prevHome = process.env.RINGZERO_HOME;
   const prevKey = process.env.API_KEY;
   process.env.RINGZERO_HOME = home;
   process.env.API_KEY = 'real-env-key';
   try {
-    assert.equal(loadEnv(cwd).apiKey, 'real-env-key');
+    assert.equal(loadEnv().apiKey, 'real-env-key');
   } finally {
     if (prevHome === undefined) delete process.env.RINGZERO_HOME;
     else process.env.RINGZERO_HOME = prevHome;
     if (prevKey === undefined) delete process.env.API_KEY;
     else process.env.API_KEY = prevKey;
     rmSync(home, { recursive: true, force: true });
-    rmSync(cwd, { recursive: true, force: true });
   }
 });

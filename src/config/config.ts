@@ -74,8 +74,12 @@ export function ancestorDirs(dir: string): string[] {
   return out;
 }
 
-export function loadConfig(): AppConfig {
-  const env = loadEnv();
+/**
+ * Build the app config from env (see loadEnv for .env precedence). `envFile`
+ * is an explicit env file from the CLI `--env <path>` flag.
+ */
+export function loadConfig(envFile?: string): AppConfig {
+  const env = loadEnv(envFile);
   const cwd = process.cwd();
   const home = homedir();
   const ringzeroHome = process.env.RINGZERO_HOME ?? join(home, '.ringzero');
