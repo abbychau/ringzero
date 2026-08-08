@@ -3,6 +3,7 @@
  * check (✔ ok / ⚠ warn / ✘ fail) and exits 1 when anything is broken, so
  * scripts and CI can gate on it.
  */
+import { execFileSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { isGitRepo } from '../tools/git.js';
 import type { AppConfig } from '../config/config.js';
@@ -36,6 +37,26 @@ export function doctorReport(config: AppConfig): DoctorFinding[] {
       ? 'interactive TTY detected'
       : `not a TTY — the line-based REPL fallback will be used${term === 'dumb' ? ' (TERM=dumb)' : ''}`,
   });
+
+  // Windows legacy codepages (e.g. cp950/Big5) garble UTF-8 output; the
+  // startup chcp 65001 switch should have made this 65001 already.
+  if (process.platform === 'win32' && tty) {
+    let cp = '?'; // chcp.com prints "Active code page: NNN" / "使用中的字碼頁: NNN"
+    try {
+      const out = execFileSync('chcp.com', [], { encoding: 'utf8' });
+      cp = out.match(/\d{3,5}/)?.[0] ?? '?';
+    } catch {
+      /* ignore */
+    }
+    out.push({
+      level: cp === '65001' ? 'ok' : 'warn',
+      label: 'Console codepage',
+      detail:
+        cp === '65001'
+          ? 'UTF-8 (65001)'
+          : `cp${cp} — legacy codepages garble UTF-8 output; restart ringzero to apply chcp 65001`,
+    });
+  }
 
   const { apiUrl, apiKey, anthropicApiKey, geminiApiKey } = config.env;
   let provider: string | null = null;

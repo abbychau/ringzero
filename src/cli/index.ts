@@ -1,7 +1,29 @@
 #!/usr/bin/env node
+import { execFileSync } from 'node:child_process';
 import { loadConfig } from '../config/config.js';
 import { runRepl } from './repl.js';
 import { runOneShot } from './json.js';
+
+/**
+ * On Windows, switch the console to UTF-8 (chcp 65001) when stdout is a TTY.
+ * RingZero (and its children) write UTF-8; a legacy codepage console (e.g.
+ * cp950/Big5 on zh-TW systems) would decode those bytes as the legacy
+ * encoding — mojibake-ing Chinese, producing PUA garbage whose terminal
+ * widths are unstable, which breaks the TUI layout (overflowing right
+ * column, misaligned rows). Also fixes copy/paste and makes cmd children
+ * emit UTF-8 for the bash tool. Best-effort: a non-console or non-Windows
+ * environment is left untouched.
+ */
+function setUtf8Console(): void {
+  if (process.platform !== 'win32' || !process.stdout.isTTY) return;
+  try {
+    execFileSync('chcp.com', ['65001'], { stdio: 'ignore' });
+  } catch {
+    // no console (piped/ssh) or chcp unavailable — output stays as-is
+  }
+}
+
+setUtf8Console();
 
 const HELP = `RingZero — minimal token-efficient agent harness
 
