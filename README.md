@@ -82,6 +82,16 @@ disclosure (skills), and ephemeral sub-agents.
 
 ## Install / build
 
+Quick install from npm (published package — works on any platform with
+Node ≥ 20.3, including macOS x86):
+
+```bash
+npm i -g ringzero
+ringzero
+```
+
+Build from source:
+
 ```bash
 npm install
 npm run build          # tsc → dist/
