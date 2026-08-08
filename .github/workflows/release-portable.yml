@@ -21,6 +21,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -28,14 +31,15 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run build:portable
-      - name: Build single-file launcher (Windows)
-        if: matrix.os == 'windows-latest'
-        run: npm run build:sfx
+      - name: Build single-file bun binary
+        run: bun run scripts/build-bun.mjs
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: portable-${{ matrix.os }}
-          path: build/portable/ringzero-*
+          path: |
+            build/portable/ringzero-*
+            build/bun/ringzero-*
       - name: Attach binaries to release
         if: startsWith(github.ref, 'refs/tags/v') || inputs.tag != ''
         shell: bash
@@ -46,7 +50,7 @@ jobs:
           tag="${{ inputs.tag || github.ref_name }}"
           cd "$GITHUB_WORKSPACE"
           gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --generate-notes || true
-          gh release upload "$tag" build/portable/ringzero-* --clobber
+          gh release upload "$tag" build/portable/ringzero-* build/bun/ringzero-* --clobber
 
   # Note: a release created from inside a workflow with GITHUB_TOKEN does NOT
   # fire the `release: published` event, so winget submission lives here

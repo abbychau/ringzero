@@ -110,11 +110,11 @@ irm https://ringzero.abby.md/install.ps1 | iex
 ringzero
 ```
 
-Downloads the latest self-extracting `ringzero-win-x64.exe` from GitHub
-Releases into `%LOCALAPPDATA%\Programs\RingZero`, adds it to your user PATH
-(no admin needed), and warms up the first-run unpack — so `ringzero` works
-immediately in that shell and in new ones. The script is reviewable in the
-repo: `install.ps1`.
+Downloads the latest single-file `ringzero-win-x64.exe` (a Bun-compiled
+standalone binary — no Node, no unpacking) from GitHub Releases into
+`%LOCALAPPDATA%\Programs\RingZero`, adds it to your user PATH, and runs it
+once so `ringzero` works immediately in that shell and in new ones. The
+script is reviewable in the repo: `install.ps1`.
 
 ### Windows: winget
 
@@ -124,47 +124,48 @@ Once the package is accepted into the community repo, Windows users install with
 winget install --id Abbychau.RingZero -e
 ```
 
-This installs the single-file, self-extracting `ringzero.exe` as a portable app
-and puts the `ringzero` command on your PATH. On first run it unpacks its
-embedded Node.js runtime + app to `%LOCALAPPDATA%\RingZero\` and then behaves
-like a normal install.
+This installs the single-file `ringzero.exe` (a Bun-compiled standalone
+binary) as a portable app and puts the `ringzero` command on your PATH.
 
 > Status: submitted to microsoft/winget-pkgs
 > ([PR #413332](https://github.com/microsoft/winget-pkgs/pull/413332)); once
 > merged, every tagged release updates the package automatically (needs a
 > `WINGET_TOKEN` PAT secret, see `.github/workflows/winget.yml`).
 
-### Portable zip (all platforms)
+### Single-file binary (all platforms)
 
-No Node, no npm needed. Download the zip for your OS from the
-[latest release](https://github.com/abbychau/ringzero/releases), unzip it, and
-run:
+No Node, no npm needed. Download the standalone binary for your OS from the
+[latest release](https://github.com/abbychau/ringzero/releases):
+`ringzero-win-x64.exe`, `ringzero-darwin-arm64`, or `ringzero-linux-x64`.
+Make it executable and run:
 
 ```bash
-# Linux / macOS
-unzip ringzero-linux-x64.zip   # or ringzero-darwin-arm64.zip
-./ringzero/ringzero --version
-
-# Windows: unzip ringzero-win-x64.zip, then run ringzero\ringzero.cmd
-# (or just download ringzero-win-x64.exe — the self-extracting single file)
+chmod +x ringzero-darwin-arm64 && ./ringzero-darwin-arm64 --version
 ```
 
-The zip is self-contained: it bundles the compiled app, its production
-dependencies, and a Node.js runtime, with `ringzero` / `ringzero.cmd` launchers.
-It runs exactly like a dev checkout — the full Ink TUI, one-shot runs, REPL,
-`--watch`, `--rpc`, skills and plugins all work. Sessions still live under
-`~/.ringzero/`.
+The binary is compiled with Bun (`npm run build:bun` — the Bun runtime and
+the whole app are embedded), so it runs anywhere with no dependencies.
 
-These zips are produced from tagged releases (`v*` tags) by the
-`Portable builds` GitHub Actions workflow via `npm run build:portable`
-(`npm run build:sfx` for the single-file Windows launcher). To build locally:
+### Portable zip (all platforms)
+
+Prefer a folder you can inspect? The zip bundles the app + a Node runtime
+with `ringzero` / `ringzero.cmd` launchers:
+
+```bash
+unzip ringzero-linux-x64.zip   # or ringzero-darwin-arm64.zip
+./ringzero/ringzero --version
+```
+
+Both are produced from tagged releases (`v*` tags) by the `Portable builds`
+GitHub Actions workflow. To build locally:
 
 ```bash
 npm run build && npm run build:portable   # → build/portable/ringzero-<platform>-<arch>.zip
-npm run build:sfx                         # (Windows) → build/portable/ringzero-win-x64.exe
+bun run scripts/build-bun.mjs             # → build/bun/ringzero-<platform>-<arch>[.exe]
 ```
 
-Only the build machine needs Node ≥ 20 and npm; end users need neither.
+Only the build machine needs Node ≥ 20 and npm (and Bun for the binary); end
+users need neither.
 
 ## Update
 
