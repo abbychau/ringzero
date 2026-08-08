@@ -179,7 +179,7 @@ export function App({
   // Collapsed todo strip is 1 line; expanded is one line per item.
   const todosH =
     !state.modal && state.todos.length > 0 ? (state.todosExpanded ? state.todos.length : 1) : 0;
-  const inputLinesN = inputLines(state.input);
+  const inputLinesN = inputLines(state.input, mainW);
   // Rows taken by the bottom section (modal, slash list, or status bar) plus the
   // input. The transcript gets exactly the remaining rows so the frame never
   // overflows the viewport: Ink shrinks overflowing flex children, which garbles
@@ -1031,6 +1031,7 @@ export function App({
           value={state.input}
           cursor={state.cursor}
           height={termRows}
+          width={mainW}
           disabled={state.running}
         />
       </Box>

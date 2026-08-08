@@ -132,10 +132,19 @@ test('inputLineCol maps cursor to line/col across newlines', () => {
 });
 
 test('inputLines counts rendered lines (min 1)', () => {
-  assert.equal(inputLines(''), 1);
-  assert.equal(inputLines('hello'), 1);
-  assert.equal(inputLines('a\nb'), 2);
-  assert.equal(inputLines('a\nb\nc'), 3);
+  assert.equal(inputLines('', 100), 1);
+  assert.equal(inputLines('hello', 100), 1);
+  assert.equal(inputLines('a\nb', 100), 2);
+  assert.equal(inputLines('a\nb\nc', 100), 3);
+});
+
+test('inputLines counts wrapped rows (CJK-aware, prefix on line 0)', () => {
+  // Line 0 also renders the ❯ prefix (2 cols), so 98 chars fill 100 cols.
+  assert.equal(inputLines('x'.repeat(98), 100), 1);
+  assert.equal(inputLines('x'.repeat(99), 100), 2);
+  assert.equal(inputLines('x'.repeat(150), 100), 2);
+  assert.equal(inputLines('a\n' + 'y'.repeat(150), 100), 3);
+  assert.equal(inputLines('你'.repeat(60), 100), 2); // CJK double-width: 120+2 cols
 });
 
 test('reducer runEnd stores ctxTokens', () => {

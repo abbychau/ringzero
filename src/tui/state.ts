@@ -1,5 +1,5 @@
 /** Pure state + reducer for the Ink TUI (testable without a TTY). */
-import { wrapText, truncateWidth } from './term.js';
+import { wrapText, truncateWidth, strWidth } from './term.js';
 import type { TodoItem } from '../tools/todo.js';
 import type { ImageInput } from '../kernel/types.js';
 
@@ -334,9 +334,21 @@ export function inputLineCol(value: string, cursor: number): { line: number; col
   return { line, col: nl === -1 ? before.length : before.length - nl - 1 };
 }
 
-/** Number of rendered lines for the input (at least 1). */
-export function inputLines(value: string): number {
-  return value ? value.split('\n').length : 1;
+/**
+ * Number of RENDERED rows for the input (at least 1), including lines wrapped
+ * at `width` columns. The ❯ prefix renders on line 0, so that line's text
+ * starts 2 columns in. CJK/fullwidth chars count as 2 columns. The layout
+ * must reserve exactly this many rows — underestimating lets Ink shrink the
+ * transcript when the input wraps, cutting off its last rows.
+ */
+export function inputLines(value: string, width: number): number {
+  const lines = value.split('\n');
+  let n = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const w = strWidth(lines[i]!) + (i === 0 ? 2 : 0);
+    n += Math.max(1, Math.ceil(w / Math.max(1, width)));
+  }
+  return n;
 }
 
 /** Built-in slash commands (for the / auto-complete dropdown). */

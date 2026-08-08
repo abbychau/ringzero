@@ -316,24 +316,33 @@ export function PromptInput({
   value,
   cursor,
   height,
+  width,
   disabled,
 }: {
   value: string;
   cursor: number;
   height: number;
+  width: number;
   disabled?: boolean;
 }): React.JSX.Element {
   const { setCursorPosition } = useCursor();
   const prefix = '❯ ';
   const lines = value.split('\n');
   const { line, col } = inputLineCol(value, cursor);
-  // x: display width up to the cursor within the CURRENT line (prefix only on
-  // line 0). Uses strWidth so CJK/fullwidth count as 2 columns.
-  const x = strWidth((line === 0 ? prefix : '') + (lines[line]?.slice(0, col) ?? ''));
-  // y: the input occupies `lines.length` rows at the bottom of the frame. Our
-  // app is fullscreen, so Ink's cursor convention is y = totalLineCount for the
-  // LAST row — subtract the rows above the cursor's line to land on it.
-  const y = height - (lines.length - 1) + line;
+  // Rendered rows per input line: Ink wraps each at `width` columns, and the
+  // ❯ prefix takes 2 columns of the first line. CJK/fullwidth count as 2 via
+  // strWidth, matching how the terminal actually lays the text out.
+  const rowsOf = (i: number): number =>
+    Math.max(1, Math.ceil((strWidth(lines[i] ?? '') + (i === 0 ? 2 : 0)) / Math.max(1, width)));
+  const totalRows = lines.reduce((n, _, i) => n + rowsOf(i), 0);
+  let rowsBefore = 0;
+  for (let i = 0; i < line; i++) rowsBefore += rowsOf(i);
+  // Display width up to the cursor within the CURRENT line (prefix on line 0).
+  const colWidth = strWidth((line === 0 ? prefix : '') + (lines[line]?.slice(0, col) ?? ''));
+  // Column within the wrapped row the cursor is on; row counted from the top
+  // of the frame (our app is fullscreen, so Ink's cursor y is 1-based rows).
+  const x = colWidth % Math.max(1, width);
+  const y = height - totalRows + rowsBefore + Math.floor(colWidth / Math.max(1, width)) + 1;
   setCursorPosition({ x, y });
   return (
     <Box flexDirection="column">
