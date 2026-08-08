@@ -109,6 +109,24 @@ test('decodeOutput tolerates an unsupported forced encoding', () => {
   }
 });
 
+test('decodeOutput trims a trailing partial UTF-8 sequence before fallback', () => {
+  // Byte-cap truncation can cut a multi-byte char in half; the incomplete tail
+  // must not poison the whole buffer into the legacy-codepage fallback (which
+  // produced mojibake + PUA garbage that broke TUI row widths).
+  const buf = Buffer.concat([Buffer.from('你好世界', 'utf8'), Buffer.from([0xe4, 0xbd])]);
+  assert.equal(decodeOutput(buf), '你好世界');
+  // Pure truncated ASCII is unaffected.
+  assert.equal(decodeOutput(Buffer.from('abc')), 'abc');
+  // A genuinely legacy-encoded (Big5) buffer is NOT trimmed and still decodes
+  // via the forced codepage.
+  process.env.RINGZERO_OS_ENCODING = 'big5';
+  try {
+    assert.equal(decodeOutput(Buffer.from([0xa4, 0xa4, 0xa4, 0xe5])), '中文');
+  } finally {
+    delete process.env.RINGZERO_OS_ENCODING;
+  }
+});
+
 test('bash tool passes UTF-8 CJK output through', async () => {
   // 你好 written as raw UTF-8 bytes so the command line itself stays ASCII
   // (survives any shell codepage on Windows CI runners).

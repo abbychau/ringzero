@@ -13,10 +13,26 @@ const MAX_OUTPUT_BYTES = MAX_OUTPUT_CHARS * 4;
  * legacy console codepage — on Windows CJK systems `cmd`/PowerShell emit
  * GBK/Big5/Shift-JIS unless `chcp 65001` is active. Override with
  * RINGZERO_OS_ENCODING (e.g. "gbk", "big5", "shift_jis", "utf-8").
+ *
+ * The buffer is first trimmed to a UTF-8 boundary: output cut mid-sequence
+ * (byte-cap truncation in runCommand) would otherwise look like invalid UTF-8
+ * and wrongly trigger the legacy fallback, mojibake-ing valid UTF-8 content
+ * (and its CJK/PUA garbage then breaks TUI row widths).
  */
 export function decodeOutput(buf: Buffer): string {
   const utf8 = buf.toString('utf8');
   if (!utf8.includes('\uFFFD')) return utf8;
+  // Byte-cap truncation can cut a multi-byte char in half, making valid UTF-8
+  // look invalid. Retry without the trailing partial sequence BEFORE falling
+  // back to a legacy codepage (which would mojibake the whole buffer, and its
+  // PUA garbage then breaks TUI row widths). Only applies when the trim
+  // actually yields clean UTF-8 — a genuinely legacy-encoded buffer is left
+  // intact for the codepage decode below.
+  const trimmed = trimToUtf8Boundary(buf);
+  if (trimmed.length !== buf.length) {
+    const t = trimmed.toString('utf8');
+    if (!t.includes('\uFFFD')) return t;
+  }
   const enc = legacyEncoding();
   if (enc) {
     try {
@@ -27,6 +43,20 @@ export function decodeOutput(buf: Buffer): string {
     }
   }
   return utf8;
+}
+
+/** Cut the buffer at the last complete UTF-8 sequence (no trailing partial). */
+function trimToUtf8Boundary(buf: Buffer): Buffer {
+  let i = buf.length;
+  // Back over continuation bytes (10xxxxxx).
+  while (i > 0 && (buf[i - 1]! & 0xc0) === 0x80) i--;
+  if (i === 0) return Buffer.alloc(0);
+  const b = buf[i - 1]!;
+  let need = 1;
+  if ((b & 0xe0) === 0xc0) need = 2;
+  else if ((b & 0xf0) === 0xe0) need = 3;
+  else if ((b & 0xf8) === 0xf0) need = 4;
+  return buf.length - (i - 1) >= need ? buf : buf.subarray(0, i - 1);
 }
 
 let legacyEnc: string | undefined;
@@ -177,7 +207,8 @@ export function runCommand(
       // Buffer chunks then decode once, so multi-byte sequences split across
       // 'data' events (or legacy codepage output) are not corrupted.
       const decoded = decodeOutput(Buffer.concat(chunks));
-      const tail = decoded.slice(-MAX_OUTPUT_CHARS);
+      // Slice on code points so a surrogate pair can't be split in half.
+      const tail = Array.from(decoded).slice(-MAX_OUTPUT_CHARS).join('');
       finish(() => resolvePromise(tail + (code === 0 ? '' : `\n[exit code ${code}]`)));
     });
   });

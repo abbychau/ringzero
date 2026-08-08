@@ -37,15 +37,18 @@ export function TranscriptRow({
   sel?: { start: number; end: number };
 }): React.JSX.Element {
   const s = TAG_STYLE[block.tag] ?? {};
+  // wrap="truncate": rows are pre-wrapped to the column width, so this only
+  // ever cuts when the terminal disagrees on a rare glyph's width — wrapping
+  // instead would push the row to two lines and overflow the frame.
   if (!sel || sel.end <= sel.start) {
     return (
-      <Text color={s.color} bold={s.bold} dimColor={s.dim}>
+      <Text color={s.color} bold={s.bold} dimColor={s.dim} wrap="truncate">
         {text}
       </Text>
     );
   }
   return (
-    <Text color={s.color} bold={s.bold} dimColor={s.dim}>
+    <Text color={s.color} bold={s.bold} dimColor={s.dim} wrap="truncate">
       {text.slice(0, sel.start)}
       <Text inverse>{text.slice(sel.start, sel.end)}</Text>
       {text.slice(sel.end)}
@@ -276,7 +279,7 @@ export function Sidebar({
         }
         const padW = Math.max(0, limit - strWidth(text));
         return r.spinner ? (
-          <Text key={i} dimColor>
+          <Text key={i} dimColor wrap="truncate">
             {'│ '}
             {state.running ? <Spinner /> : <Text dimColor>●</Text>} {inner}
             {' '.repeat(padW)}
@@ -285,8 +288,10 @@ export function Sidebar({
           // The separator is its own dim Text so the content's closing codes
           // (e.g. SGR 22 resets both bold and dim) can't un-dim it.
           <Box key={i} flexDirection="row">
-            <Text dimColor>{'│ '}</Text>
-            <Text color={r.color} dimColor={r.dim} bold={r.bold}>
+            <Text dimColor wrap="truncate">
+              {'│ '}
+            </Text>
+            <Text color={r.color} dimColor={r.dim} bold={r.bold} wrap="truncate">
               {inner}
               {' '.repeat(padW)}
             </Text>
