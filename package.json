@@ -19,7 +19,7 @@
     "LICENSE"
   ],
   "bin": {
-    "ringzero": "./dist/src/cli/index.js"
+    "ringzero": "dist/src/cli/index.js"
   },
   "engines": {
     "node": ">=20.3.0"
