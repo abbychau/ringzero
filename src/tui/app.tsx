@@ -796,9 +796,9 @@ export function App({
       const lineIdxRaw = e.y - 1 - lay.headerH - todosH;
       const lineIdx = Math.max(0, Math.min(lay.height - 1, lineIdxRaw));
       const inTranscript = lineIdxRaw >= 0 && lineIdxRaw < lay.height;
-      // Sidebar content row index (0-based into lay.sidebarRows); the box's top
-      // border adds one more row above the transcript's first line.
-      const sidebarIdxRaw = e.y - 2 - lay.headerH - todosH;
+      // Sidebar content row index (0-based into lay.sidebarRows); with the
+      // borderless layout the sidebar starts on the transcript's first row.
+      const sidebarIdxRaw = e.y - 1 - lay.headerH - todosH;
       const sidebarIdx = Math.max(0, Math.min(lay.sidebarRows.length - 1, sidebarIdxRaw));
       const inSidebarContent = sidebarIdxRaw >= 0 && sidebarIdxRaw < lay.sidebarRows.length;
       // Terminal column (1-based x) → character index inside the row text,
@@ -807,7 +807,7 @@ export function App({
         const r = lay.visible[li];
         return r ? colToCharIndex(r.text, Math.max(0, x - 1)) : 0;
       };
-      // Sidebar text starts after the '│ ' border ('│' at mainW+2, text at
+      // Sidebar text starts after the '│ ' separator ('│' at mainW+2, text at
       // mainW+4 once the gap column is accounted for).
       const colAtSidebar = (li: number, x: number): number =>
         colToCharIndex(lay.sidebarRows[li]?.text ?? '', Math.max(0, x - lay.mainW - 4));

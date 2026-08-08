@@ -16,7 +16,7 @@ import {
 import { estimateCost, fmtCost, cacheHitRate } from '../kernel/cost.js';
 
 /** Fixed width of the metadata/hints sidebar (opencode-style right column). */
-export const SIDEBAR_W = 26;
+export const SIDEBAR_W = 24;
 
 const TAG_STYLE: Record<Block['tag'], { color?: string; bold?: boolean; dim?: boolean }> = {
   user: { color: 'cyan' },
@@ -109,11 +109,6 @@ interface SidebarRow {
 }
 
 /**
- * Right-side column (opencode style): header + metadata + status line, inside
- * a box border. Rows it can't fit are trimmed from the tail; the status row is
- * always pinned to the bottom.
- */
-/**
  * Builds the sidebar's rendered rows (styles + padding) so the same content is
  * used for drawing and for the text-based selection model.
  */
@@ -128,7 +123,7 @@ function sidebarContent(
   width: number,
   height: number,
 ): { visibleRows: SidebarRow[]; avail: number; contentW: number } {
-  const contentW = width - 4; // '│ ' + content + ' │'
+  const contentW = width - 2; // '│ ' separator + content
   const rows: SidebarRow[] = [
     { text: `RingZero · ${cwdName}`, bold: true },
     { text: '', dim: true },
@@ -181,7 +176,7 @@ function sidebarContent(
     statusRows.push({ text: 'Esc to input', dim: true });
   }
 
-  const avail = Math.max(1, height - 2);
+  const avail = Math.max(1, height);
   // Status rows stay pinned at the bottom; body rows are trimmed from the tail
   // when there isn't enough room.
   const nStatus = Math.min(statusRows.length, avail);
@@ -265,7 +260,6 @@ export function Sidebar({
   const sel = selection && selection.pane === 'sidebar' ? selection : undefined;
   return (
     <Box flexDirection="column" width={width}>
-      <Text dimColor>{'╭' + '─'.repeat(width - 2) + '╮'}</Text>
       {visibleRows.map((r, i) => {
         const limit = r.spinner ? contentW - 2 : contentW;
         const text = truncateWidth(r.text ?? '', limit);
@@ -286,28 +280,24 @@ export function Sidebar({
             {'│ '}
             {state.running ? <Spinner /> : <Text dimColor>●</Text>} {inner}
             {' '.repeat(padW)}
-            {' │'}
           </Text>
         ) : (
-          // Borders are their own dim Texts: the content's closing codes (e.g.
-          // SGR 22 resets both bold and dim) would otherwise un-dim the right
-          // border. Separating them keeps the frame one continuous dim box.
+          // The separator is its own dim Text so the content's closing codes
+          // (e.g. SGR 22 resets both bold and dim) can't un-dim it.
           <Box key={i} flexDirection="row">
             <Text dimColor>{'│ '}</Text>
             <Text color={r.color} dimColor={r.dim} bold={r.bold}>
               {inner}
               {' '.repeat(padW)}
             </Text>
-            <Text dimColor>{' │'}</Text>
           </Box>
         );
       })}
       {Array.from({ length: pad }, (_, i) => (
         <Text key={`p${i}`} dimColor>
-          {'│' + ' '.repeat(width - 2) + '│'}
+          {'│' + ' '.repeat(width - 1)}
         </Text>
       ))}
-      <Text dimColor>{'╰' + '─'.repeat(width - 2) + '╯'}</Text>
     </Box>
   );
 }

@@ -199,8 +199,8 @@ test('TranscriptRow renders plainly without a selection', () => {
 });
 
 test('sidebarTextLines returns selectable text lines with status and padding', () => {
-  const lines = sidebarTextLines(initial('m'), 'model-x', 'abc12345', 32000, 'proj', 3, 2, 26, 10);
-  assert.equal(lines.length, 8); // height 10 → box interior of 8 rows
+  const lines = sidebarTextLines(initial('m'), 'model-x', 'abc12345', 32000, 'proj', 3, 2, 24, 10);
+  assert.equal(lines.length, 10); // borderless: height 10 → 10 rows
   assert.ok(lines[0]!.includes('RingZero · proj'), `lines: ${JSON.stringify(lines)}`);
   assert.ok(
     lines.some((l) => l.includes('model-x')),
