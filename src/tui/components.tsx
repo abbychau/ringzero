@@ -262,7 +262,7 @@ export function Sidebar({
   const pad = Math.max(0, avail - visibleRows.length);
   const sel = selection && selection.pane === 'sidebar' ? selection : undefined;
   return (
-    <Box flexDirection="column" width={width}>
+    <Box flexDirection="column" width={width} height={height}>
       {visibleRows.map((r, i) => {
         const limit = r.spinner ? contentW - 2 : contentW;
         const text = truncateWidth(r.text ?? '', limit);
@@ -279,7 +279,7 @@ export function Sidebar({
         }
         const padW = Math.max(0, limit - strWidth(text));
         return r.spinner ? (
-          <Text key={i} dimColor wrap="truncate">
+          <Text key={i} dimColor>
             {'│ '}
             {state.running ? <Spinner /> : <Text dimColor>●</Text>} {inner}
             {' '.repeat(padW)}
@@ -288,16 +288,17 @@ export function Sidebar({
           // The separator is its own dim Text so the content's closing codes
           // (e.g. SGR 22 resets both bold and dim) can't un-dim it.
           <Box key={i} flexDirection="row">
-            <Text dimColor wrap="truncate">
-              {'│ '}
-            </Text>
-            <Text color={r.color} dimColor={r.dim} bold={r.bold} wrap="truncate">
+            <Text dimColor>{'│ '}</Text>
+            <Text color={r.color} dimColor={r.dim} bold={r.bold}>
               {inner}
               {' '.repeat(padW)}
             </Text>
           </Box>
         );
       })}
+      {/* Pad to the full height: the sidebar column must render exactly
+          `height` rows or the frame merge with the transcript column
+          misaligns (this column's rows vanish). */}
       {Array.from({ length: pad }, (_, i) => (
         <Text key={`p${i}`} dimColor>
           {'│' + ' '.repeat(width - 1)}

@@ -999,6 +999,12 @@ export function App({
                 />
               );
             })}
+            {/* Pad to the full frame height so this column always renders
+                exactly transH rows — otherwise the frame merge with the
+                sidebar column misaligns (sidebar rows vanish / blank gaps). */}
+            {Array.from({ length: Math.max(0, transH - win.visible.length) }, (_, i) => (
+              <Text key={`pad${i}`}> </Text>
+            ))}
           </Box>
         </Box>
         {showSidebar && <Text> </Text>}
