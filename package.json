@@ -34,6 +34,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "npm run build && node --test \"dist/test/*.test.js\"",
+    "test:bun": "bun test",
     "smoke": "npm run build && node dist/scripts/smoke.js",
     "smoke:agent": "npm run build && node dist/scripts/agent-smoke.js",
     "e2e": "npm run build && node dist/scripts/e2e-app.js",

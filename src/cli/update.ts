@@ -58,8 +58,24 @@ export function assetFor(
   platform: NodeJS.Platform,
   arch: string,
 ): { name: string; kind: 'exe' | 'zip' } | null {
+  // Single-file bun binaries first; the portable zip is the fallback for the
+  // dir-based installs.
   if (platform === 'win32')
     return arch === 'x64' ? { name: 'ringzero-win-x64.exe', kind: 'exe' } : null;
+  if (platform === 'darwin')
+    return arch === 'arm64' ? { name: 'ringzero-darwin-arm64', kind: 'exe' } : null;
+  if (platform === 'linux')
+    return arch === 'x64' ? { name: 'ringzero-linux-x64', kind: 'exe' } : null;
+  return null;
+}
+
+/** The portable-zip asset for the current platform (dir-based installs). */
+export function assetForZip(
+  platform: NodeJS.Platform,
+  arch: string,
+): { name: string; kind: 'exe' | 'zip' } | null {
+  if (platform === 'win32')
+    return arch === 'x64' ? { name: 'ringzero-win-x64.zip', kind: 'zip' } : null;
   if (platform === 'darwin')
     return arch === 'arm64' ? { name: 'ringzero-darwin-arm64.zip', kind: 'zip' } : null;
   if (platform === 'linux')
@@ -89,8 +105,8 @@ function findOnPath(name: string): string | null {
 /**
  * Locate the installed copy we are running from. `process.execPath` is the
  * embedded Node runtime inside the install dir (SFX payload dir on Windows,
- * the portable dir on macOS/Linux), so the launcher it belongs to is derived
- * from that.
+ * the portable dir on macOS/Linux) or the Bun-compiled single-file binary
+ * itself.
  */
 export function detectInstall(): InstallInfo {
   // npm global install: this module lives under <prefix>/node_modules/ringzero.
@@ -108,9 +124,23 @@ export function detectInstall(): InstallInfo {
       const onPath = findOnPath('ringzero.exe');
       if (onPath) return { kind: 'exe', target: onPath };
     }
+    // Bun-compiled single-file binary (ringzero.exe).
+    if (base === 'ringzero.exe') {
+      const installed = join(
+        process.env.LOCALAPPDATA ?? '',
+        'Programs',
+        'RingZero',
+        'ringzero.exe',
+      );
+      if (existsSync(installed)) return { kind: 'exe', target: installed };
+      const onPath = findOnPath('ringzero.exe');
+      if (onPath && onPath !== exe) return { kind: 'exe', target: onPath };
+    }
     return { kind: 'unknown' };
   }
   if (base === 'node' && isAppDir(dir)) return { kind: 'dir', target: dir };
+  // Bun-compiled single-file binary: running from the installed file itself.
+  if (base === 'ringzero' && existsSync(exe)) return { kind: 'exe', target: exe };
   return { kind: 'unknown' };
 }
 
@@ -177,21 +207,31 @@ async function download(url: string, dest: string): Promise<void> {
   writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
 }
 
-/** Replace a Windows SFX exe (rename-swap; a running exe can't be overwritten). */
+/** Replace a single-file binary (rename-swap; a running exe can't be overwritten). */
 async function updateExe(exePath: string, url: string): Promise<void> {
   const dir = dirname(exePath);
   const tmp = join(dir, 'ringzero.exe.new');
   const old = join(dir, 'ringzero.exe.old');
   await download(url, tmp);
+  if (process.platform !== 'win32') chmodSync(tmp, 0o755);
   renameSync(exePath, old);
   renameSync(tmp, exePath);
-  // Detached cleanup of the old binary after this process exits.
-  const child = spawn('cmd.exe', ['/c', `ping -n 5 127.0.0.1 > nul & del /f /q "${old}"`], {
-    detached: true,
-    stdio: 'ignore',
-    windowsHide: true,
-  });
-  child.unref();
+  // Detached cleanup of the old binary after this process exits (the old file
+  // is locked on Windows while this process runs).
+  if (process.platform === 'win32') {
+    const child = spawn('cmd.exe', ['/c', `ping -n 5 127.0.0.1 > nul & del /f /q "${old}"`], {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+    child.unref();
+  } else {
+    const child = spawn('sh', ['-c', `sleep 5; rm -f "${old}"`], {
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+  }
 }
 
 /** Replace a macOS/Linux portable install dir with the freshly extracted zip. */
@@ -233,7 +273,6 @@ async function updateDir(installDir: string, url: string, assetName: string): Pr
 /** Main entry: check for updates and apply if available. Returns exit code. */
 export async function runUpdate(): Promise<number> {
   const info = detectInstall();
-  const asset = assetFor(process.platform, process.arch);
 
   console.log(`ringzero ${VERSION}`);
   console.log('Checking for updates…');
@@ -261,6 +300,11 @@ export async function runUpdate(): Promise<number> {
     return 1;
   }
 
+  // Single-file bun binary for exe installs; the portable zip for dir installs.
+  const asset =
+    info.kind === 'dir'
+      ? assetForZip(process.platform, process.arch)
+      : assetFor(process.platform, process.arch);
   if (!asset) {
     console.error(
       `A newer version (${release.version}) exists, but there is no prebuilt asset for ` +
