@@ -25,7 +25,10 @@ test('estimateCost counts cacheWrite like cacheRead', () => {
 });
 
 test('cacheHitRate is cached/(input+cached), guarded against zero', () => {
+  // input is the FRESH (uncached) input, so cached/(input+cached) = hit/total.
+  // E.g. 5k fresh + 5k cached → 50%; 1k fresh + 99k cached → 99%.
   assert.equal(cacheHitRate({ input: 5000, output: 100, cacheRead: 5000 }), 0.5);
+  assert.equal(cacheHitRate({ input: 1000, output: 0, cacheRead: 99_000 }), 0.99);
   assert.equal(cacheHitRate({ input: 0, output: 0 }), 0);
   assert.equal(cacheHitRate({ input: 1000, output: 0 }), 0);
 });

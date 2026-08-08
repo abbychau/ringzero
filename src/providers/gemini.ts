@@ -167,8 +167,11 @@ export function createGeminiProvider(cfg: GeminiConfig): Provider {
         }
         if (chunk.usageMetadata) {
           const cacheRead = chunk.usageMetadata.cachedContentTokenCount;
+          // Gemini counts cached tokens inside promptTokenCount; keep input as
+          // the FRESH part so cacheHitRate isn't diluted by double-counting.
+          const input = Math.max(0, (chunk.usageMetadata.promptTokenCount ?? 0) - (cacheRead ?? 0));
           usage = {
-            input: chunk.usageMetadata.promptTokenCount ?? 0,
+            input,
             output: chunk.usageMetadata.candidatesTokenCount ?? 0,
             ...(cacheRead && cacheRead > 0 ? { cacheRead } : {}),
           };

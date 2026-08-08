@@ -172,8 +172,12 @@ export function createOpenAICompatProvider(cfg: OpenAICompatConfig): Provider {
         if (chunk.usage) {
           const cacheRead = chunk.usage.prompt_tokens_details?.cached_tokens;
           const cacheWrite = chunk.usage.prompt_tokens_details?.cache_creation_input_tokens;
+          // OpenAI-compat endpoints (OpenAI, DeepSeek, …) count cached tokens
+          // INSIDE prompt_tokens, so input here is the FRESH (uncached) part —
+          // keeps cacheHitRate and the cost estimate from double-counting.
+          const input = Math.max(0, (chunk.usage.prompt_tokens ?? 0) - (cacheRead ?? 0));
           usage = {
-            input: chunk.usage.prompt_tokens ?? 0,
+            input,
             output: chunk.usage.completion_tokens ?? 0,
             ...(cacheRead !== undefined ? { cacheRead } : {}),
             ...(cacheWrite !== undefined ? { cacheWrite } : {}),

@@ -91,6 +91,25 @@ test('openai-compat surfaces reasoning_content as thinking events', async () => 
   );
 });
 
+test('openai-compat reports cached tokens separately from fresh input', async () => {
+  // DeepSeek/OpenAI count cached tokens INSIDE prompt_tokens; input must be
+  // the fresh remainder so cacheHitRate and cost aren't double-counted.
+  const sse = [
+    'data: {"choices":[{"delta":{"content":"ok"}}],"usage":{"prompt_tokens":100,"completion_tokens":5,"prompt_tokens_details":{"cached_tokens":90}}}',
+    'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}',
+    'data: [DONE]',
+  ].join('\n\n');
+  const provider = createOpenAICompatProvider({
+    id: 'test',
+    baseURL: 'http://example.com/v1',
+    apiKey: 'k',
+    model: 'm',
+  });
+  const evs = await collectEvents(sse, () => provider.chat({ messages: [] }));
+  const finish = evs[evs.length - 1] as Extract<ChatEvent, { type: 'finish' }>;
+  assert.deepEqual(finish.usage, { input: 10, output: 5, cacheRead: 90 });
+});
+
 test('anthropic surfaces thinking blocks as thinking events', async () => {
   const sse = [
     'event: message_start',
@@ -222,6 +241,7 @@ test('gemini streams text, thinking, and function calls from SSE chunks', async 
   assert.equal(calls.calls[0]!.name, 'read_file');
   assert.equal(calls.calls[0]!.args, '{"path":"a.ts"}');
   const finish = evs[evs.length - 1] as Extract<ChatEvent, { type: 'finish' }>;
+  // Last usage chunk has promptTokenCount 100 with no cached tokens → input 100.
   assert.deepEqual(finish.usage, { input: 100, output: 12 });
   assert.equal(finish.finishReason, 'STOP');
 });
