@@ -18,6 +18,7 @@ import {
   selectionRange,
   selectionText,
   shiftSelect,
+  historyToBlocks,
   type Modal,
   type Row,
   type Selection,
@@ -234,6 +235,14 @@ export function App({
   useEffect(() => {
     sysRef.current = pushSys;
   }, [pushSys]);
+
+  // Resume: replay the session's existing transcript instead of an empty pane.
+  useEffect(() => {
+    if (runner.sessionId) {
+      dispatch({ type: 'setBlocks', blocks: historyToBlocks(runner.historyMessages()) });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only
+  }, []);
 
   useEffect(() => {
     askRef.current = (prompt: string) => {

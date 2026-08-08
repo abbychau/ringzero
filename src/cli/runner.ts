@@ -148,6 +148,11 @@ export class Runner {
     return this.sessionId;
   }
 
+  /** Messages of the current session (loaded history, or [] for a new one). */
+  historyMessages(): SessionMessage[] {
+    return this.history;
+  }
+
   /** Connect configured MCP servers + load plugins once. */
   async init(): Promise<void> {
     if (this.mcpInited) return;

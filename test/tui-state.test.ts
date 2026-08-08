@@ -11,6 +11,7 @@ import {
   inputLineCol,
   inputLines,
   slashMatches,
+  historyToBlocks,
   selectionRange,
   selectionText,
   shiftSelect,
@@ -145,6 +146,52 @@ test('inputLines counts wrapped rows (CJK-aware, prefix on line 0)', () => {
   assert.equal(inputLines('x'.repeat(150), 100), 2);
   assert.equal(inputLines('a\n' + 'y'.repeat(150), 100), 3);
   assert.equal(inputLines('你'.repeat(60), 100), 2); // CJK double-width: 120+2 cols
+});
+
+test('historyToBlocks replays session messages as transcript blocks', () => {
+  const blocks = historyToBlocks([
+    { id: '1', role: 'user', content: 'hello', ts: 1 },
+    {
+      id: '2',
+      role: 'assistant',
+      content: 'hi there',
+      toolCalls: [{ id: 't1', name: 'bash', args: '{"command":"ls"}' }],
+      ts: 2,
+    },
+    { id: '3', role: 'tool', toolName: 'bash', content: 'file.txt', ts: 3 },
+    { id: '4', role: 'assistant', content: 'done', ts: 4 },
+  ]);
+  assert.deepEqual(blocks, [
+    { tag: 'user', text: 'hello' },
+    { tag: 'assistant', text: 'hi there' },
+    {
+      tag: 'tool',
+      name: 'bash',
+      args: '{"command":"ls"}',
+      done: true,
+      expanded: false,
+      output: 'file.txt',
+    },
+    { tag: 'assistant', text: 'done' },
+  ]);
+});
+
+test('historyToBlocks ignores empty text and unmatched tool results', () => {
+  const blocks = historyToBlocks([
+    { id: '1', role: 'user', content: '   ', ts: 1 },
+    { id: '2', role: 'tool', toolName: 'nope', content: 'orphan', ts: 2 },
+  ]);
+  assert.deepEqual(blocks, []);
+});
+
+test('reducer setBlocks replaces the transcript and resets scroll/selection', () => {
+  let s = initial('m');
+  s = reducer(s, { type: 'push', block: { tag: 'user', text: 'old' } });
+  s = reducer(s, { type: 'setBlocks', blocks: [{ tag: 'user', text: 'new' }] });
+  assert.equal(s.blocks.length, 1);
+  assert.equal(s.blocks[0]!.tag, 'user');
+  assert.equal((s.blocks[0] as { text: string }).text, 'new');
+  assert.equal(s.scroll, 0);
 });
 
 test('reducer runEnd stores ctxTokens', () => {

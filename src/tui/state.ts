@@ -1,7 +1,7 @@
 /** Pure state + reducer for the Ink TUI (testable without a TTY). */
 import { wrapText, truncateWidth, strWidth } from './term.js';
 import type { TodoItem } from '../tools/todo.js';
-import type { ImageInput } from '../kernel/types.js';
+import type { ImageInput, SessionMessage } from '../kernel/types.js';
 
 export type Block =
   | { tag: 'user'; text: string }
@@ -122,6 +122,7 @@ export type Action =
   | { type: 'history'; index: number }
   | { type: 'flash'; text: string }
   | { type: 'clearFlash' }
+  | { type: 'setBlocks'; blocks: Block[] }
   | { type: 'clear' };
 
 export function initial(model: string, planMode = false, yolo = false): State {
@@ -142,6 +143,39 @@ export function initial(model: string, planMode = false, yolo = false): State {
     todos: [],
     todosExpanded: false,
   };
+}
+
+/**
+ * Convert persisted session messages into transcript blocks, mirroring how
+ * live agent events build blocks (assistant text, thinking, tool call+result
+ * pairs). Used to replay a resumed session instead of starting with an empty
+ * transcript.
+ */
+export function historyToBlocks(msgs: SessionMessage[]): Block[] {
+  const blocks: Block[] = [];
+  for (const m of msgs) {
+    if (m.role === 'user') {
+      if (m.content.trim()) blocks.push({ tag: 'user', text: m.content });
+    } else if (m.role === 'assistant') {
+      if (m.content.trim()) blocks.push({ tag: 'assistant', text: m.content });
+      // Replayed tool calls are shown collapsed like live ones; their results
+      // arrive as separate role:'tool' messages right after.
+      for (const tc of m.toolCalls ?? []) {
+        blocks.push({ tag: 'tool', name: tc.name, args: tc.args, done: false, expanded: false });
+      }
+    } else if (m.role === 'tool') {
+      // Match the pending tool block by name (last not-yet-done one), same as
+      // the live `setToolOutput` reducer.
+      for (let i = blocks.length - 1; i >= 0; i--) {
+        const b = blocks[i];
+        if (b && b.tag === 'tool' && !b.done && b.name === m.toolName) {
+          blocks[i] = { ...b, output: m.content, done: true };
+          break;
+        }
+      }
+    }
+  }
+  return blocks;
 }
 
 export function reducer(s: State, a: Action): State {
@@ -284,6 +318,15 @@ export function reducer(s: State, a: Action): State {
       return { ...s, flash: { text: a.text, at: Date.now() } };
     case 'clearFlash':
       return { ...s, flash: undefined };
+    case 'setBlocks':
+      // Bulk-load (e.g. resumed session transcript); jump to the bottom.
+      return {
+        ...s,
+        blocks: a.blocks,
+        scroll: 0,
+        transcriptFocus: false,
+        selection: undefined,
+      };
     case 'clear':
       return {
         ...s,
