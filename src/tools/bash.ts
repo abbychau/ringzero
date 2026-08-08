@@ -156,7 +156,90 @@ function killTree(child: ReturnType<typeof spawn>): void {
   }
 }
 
+/** True when running under Bun (bun shell `$` available, no import needed). */
+function hasBunShell(): boolean {
+  return typeof (globalThis as { Bun?: { $?: unknown } }).Bun?.$ === 'function';
+}
+
+/**
+ * Run a command through Bun's cross-platform shell (`$`): POSIX syntax works
+ * on every platform (Windows included — no cmd.exe/PowerShell quirks). Only
+ * used when running under Bun; plain Node keeps the native spawn path below.
+ *
+ * Bun shell in 1.3.x has no kill/timeout API, so the timeout and abort are
+ * implemented by racing — the shell child may linger in the background until
+ * the command itself finishes. The node path keeps the full process-tree
+ * kill.
+ */
+async function runCommandBun(
+  command: string,
+  cwd: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  // Bun's shell `$` is only reachable at runtime under Bun; type it loosely so
+  // plain-Node builds still typecheck (the global is absent there).
+  type BunShell = {
+    cwd(dir: string): BunShell;
+    env(env: Record<string, string | undefined>): BunShell;
+    quiet(): BunShell;
+    nothrow(): Promise<{ stdout: Uint8Array; stderr: Uint8Array; exitCode: number }>;
+  };
+  const bun = (globalThis as unknown as { Bun?: { $: <T>(...v: unknown[]) => T } }).Bun;
+
+  const task = async (): Promise<string> => {
+    // `$` only accepts tagged-template calls; construct the strings object
+    // with `raw` so the full command is interpolated as one argument.
+    const strings = { raw: [command] } as unknown as TemplateStringsArray;
+    const shell = bun!.$<BunShell>(strings);
+    const r = await shell
+      .cwd(cwd)
+      .env({ ...sanitizeEnv(), FORCE_COLOR: '0', NO_COLOR: '1' })
+      .quiet()
+      .nothrow();
+    const out = Buffer.concat([Buffer.from(r.stdout), Buffer.from(r.stderr)]);
+    const decoded = decodeOutput(out);
+    // Slice on code points so a surrogate pair can't be split in half.
+    const tail = Array.from(decoded).slice(-MAX_OUTPUT_CHARS).join('');
+    return tail + (r.exitCode === 0 ? '' : `\n[exit code ${r.exitCode}]`);
+  };
+
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutTimer = setTimeout(
+      () => reject(new Error(`command timed out after ${timeoutMs}ms`)),
+      timeoutMs,
+    );
+  });
+
+  let onAbort: (() => void) | undefined;
+  const abort = new Promise<never>((_, reject) => {
+    if (signal?.aborted) return reject(signal.reason ?? new Error('aborted'));
+    onAbort = (): void => reject(signal?.reason ?? new Error('aborted'));
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+
+  return Promise.race([task(), timeout, abort]).finally(() => {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  });
+}
+
 export function runCommand(
+  command: string,
+  cwd: string,
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<string> {
+  // Under Bun, use the cross-platform shell so POSIX commands (ls, pwd, tail)
+  // work on Windows too.
+  if (hasBunShell()) {
+    return runCommandBun(command, cwd, timeoutMs, signal);
+  }
+  return runCommandNode(command, cwd, timeoutMs, signal);
+}
+
+function runCommandNode(
   command: string,
   cwd: string,
   timeoutMs: number,
