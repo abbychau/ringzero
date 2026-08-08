@@ -101,6 +101,15 @@ npm run build          # tsc → dist/
 npm test               # build + node --test
 ```
 
+Bun is the recommended dev toolchain (faster tests + the cross-platform
+shell + single-file binaries). Install Bun, then:
+
+```bash
+bun install             # bun.lock
+bun test                # runs the TS tests directly (no build step)
+bun run scripts/build-bun.mjs   # single-file binary → build/bun/
+```
+
 ## Install without npm
 
 ### Windows: one-line installer (PowerShell)

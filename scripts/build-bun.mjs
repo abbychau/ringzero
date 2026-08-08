@@ -12,7 +12,15 @@
  * ink's optional react-devtools-core peer is resolved to the stub in
  * node_modules/react-devtools-core (only imported when DEV=true).
  */
-import { existsSync, readFileSync, renameSync, rmSync, statSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -34,11 +42,27 @@ const outfile = join(
   `ringzero-${plat}${process.platform === 'win32' ? '.exe' : ''}`,
 );
 
-// The stub must exist for the bundle to resolve ink's optional peer.
-const stub = join(root, 'node_modules', 'react-devtools-core', 'index.js');
+// ink's optional react-devtools-core peer must resolve for the bundle. It is
+// not a real dependency, so ensure a no-op stub exists (npm ci won't install
+// it). The stub is only ever imported when DEV=true (opt-in devtools).
+const stubDir = join(root, 'node_modules', 'react-devtools-core');
+const stub = join(stubDir, 'index.js');
 if (!existsSync(stub)) {
-  console.error('missing node_modules/react-devtools-core stub — run `bun install` first.');
-  process.exit(1);
+  mkdirSync(stubDir, { recursive: true });
+  writeFileSync(
+    join(stubDir, 'package.json'),
+    JSON.stringify({
+      name: 'react-devtools-core',
+      version: '0.0.0-stub',
+      description: 'No-op stub for ink optional peer (only imported when DEV=true).',
+      main: 'index.js',
+      type: 'module',
+    }),
+  );
+  writeFileSync(
+    stub,
+    '// No-op stub for ink optional peer.\nexport default { initialize() {}, connectToDevTools() {} };\n',
+  );
 }
 
 rmSync(outfile, { force: true });
