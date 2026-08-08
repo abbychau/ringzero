@@ -3,3 +3,9 @@
 # is swapped for a no-op stub so `bun build --compile` stays self-contained.
 [alias]
 react-devtools-core = "./scripts/react-devtools-stub.js"
+
+# Test discovery is rooted at ./test — `bun test <dir>` ignores the argument
+# and scans the whole project, which would also run the compiled dist/test/*
+# duplicates.
+[test]
+root = "./test"

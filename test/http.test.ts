@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer, type Server } from 'node:http';
 import { homedir } from 'node:os';
@@ -6,7 +6,17 @@ import { httpRequestTool } from '../src/tools/http.js';
 import type { ToolContext } from '../src/kernel/types.js';
 
 // Localhost is a private address — the SSRF guard blocks it unless opted out.
-process.env.RINGZERO_ALLOW_PRIVATE_NET = '1';
+// Set it in before/after (NOT at module top level): test files share the
+// process env under bun, so a top-level mutation would leak into other files
+// (e.g. web.test.ts) and break their assertions.
+const prevPrivateNet = process.env.RINGZERO_ALLOW_PRIVATE_NET;
+before(() => {
+  process.env.RINGZERO_ALLOW_PRIVATE_NET = '1';
+});
+after(() => {
+  if (prevPrivateNet === undefined) delete process.env.RINGZERO_ALLOW_PRIVATE_NET;
+  else process.env.RINGZERO_ALLOW_PRIVATE_NET = prevPrivateNet;
+});
 
 const ctx: ToolContext = {
   cwd: process.cwd(),

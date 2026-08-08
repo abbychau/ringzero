@@ -14,11 +14,12 @@ import { defaultTools } from '../src/tools/index.js';
 import { createTaskTool } from '../src/tools/task.js';
 import { createScriptedProvider, type ScriptedConversation } from './util/scripted.js';
 import type { Tool } from '../src/kernel/types.js';
+import { repoRoot } from './root.js';
 
-const FIXTURES = new URL('../../test/fixtures/', import.meta.url);
+const FIXTURES = join(repoRoot(), 'test', 'fixtures');
 
 function loadFixture(name: string): { convos: ScriptedConversation[] } {
-  return JSON.parse(readFileSync(new URL(`${name}.json`, FIXTURES), 'utf8')) as {
+  return JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), 'utf8')) as {
     convos: ScriptedConversation[];
   };
 }

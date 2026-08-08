@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { McpClient } from '../src/mcp/client.js';
 import { stdioTransport, type Transport } from '../src/mcp/transports.js';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { repoRoot } from './root.js';
 class FakeTransport implements Transport {
   onMsg: (raw: string) => void = () => {};
   sent: string[] = [];
@@ -54,13 +54,13 @@ test('mcp client routes responses by id (offline)', async () => {
   await c.close();
 });
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// scripts/fake-mcp-server.mjs lives at repo root; resolve from this test file.
-const repoRoot = join(__dirname, '..', '..');
-const serverPath = join(repoRoot, 'scripts', 'fake-mcp-server.mjs');
+// scripts/fake-mcp-server.mjs lives at repo root; resolve it layout-independently
+// (tsc → dist/test/…, bun → test/…).
+const repoRootDir = repoRoot();
+const serverPath = join(repoRootDir, 'scripts', 'fake-mcp-server.mjs');
 
 test('mcp stdio transport talks to a real spawned server', async () => {
-  const t = stdioTransport(process.execPath, [serverPath], repoRoot);
+  const t = stdioTransport(process.execPath, [serverPath], repoRootDir);
   const c = new McpClient(t);
   await c.connect();
   const tools = await c.listTools();
