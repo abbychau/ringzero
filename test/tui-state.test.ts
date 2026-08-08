@@ -285,6 +285,22 @@ test('reducer scroll clamps at 0', () => {
   assert.equal(s.scroll, 0);
 });
 
+test('reducer keeps scroll position when new content arrives while scrolled up', () => {
+  let s = initial('m');
+  s = reducer(s, { type: 'scroll', delta: 5 });
+  assert.equal(s.scroll, 5);
+  // New blocks while scrolled up must NOT yank the view back to the bottom.
+  s = reducer(s, { type: 'push', block: { tag: 'sys', text: 'hi' } });
+  assert.equal(s.scroll, 5);
+  s = reducer(s, { type: 'appendAssistant', delta: 'more' });
+  assert.equal(s.scroll, 5);
+  s = reducer(s, { type: 'setToolOutput', output: 'out', done: true });
+  assert.equal(s.scroll, 5);
+  // Submitting a prompt still snaps back to the bottom.
+  s = reducer(s, { type: 'submit', text: 'go' });
+  assert.equal(s.scroll, 0);
+});
+
 test('reducer setSelection stores and structural changes clear it', () => {
   let s = initial('m');
   const sel: Selection = { anchorRow: 0, anchorCol: 0, headRow: 1, headCol: 3 };

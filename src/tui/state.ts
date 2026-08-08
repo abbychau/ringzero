@@ -180,11 +180,14 @@ export function historyToBlocks(msgs: SessionMessage[]): Block[] {
 
 export function reducer(s: State, a: Action): State {
   switch (a.type) {
+    // New content only auto-scrolls to the bottom when the user is already
+    // there (scroll === 0); if they scrolled up, keep their position instead
+    // of yanking the view down.
     case 'push':
       return {
         ...s,
         blocks: [...s.blocks, a.block],
-        scroll: 0,
+        scroll: s.scroll,
         transcriptFocus: false,
         selection: undefined,
       };
@@ -196,7 +199,7 @@ export function reducer(s: State, a: Action): State {
       } else {
         blocks.push({ tag: 'assistant', text: a.delta });
       }
-      return { ...s, blocks, scroll: 0, transcriptFocus: false, selection: undefined };
+      return { ...s, blocks, scroll: s.scroll, transcriptFocus: false, selection: undefined };
     }
     case 'appendThinking': {
       const blocks = [...s.blocks];
@@ -206,7 +209,7 @@ export function reducer(s: State, a: Action): State {
       } else {
         blocks.push({ tag: 'thinking', text: a.delta, expanded: false });
       }
-      return { ...s, blocks, scroll: 0, transcriptFocus: false, selection: undefined };
+      return { ...s, blocks, scroll: s.scroll, transcriptFocus: false, selection: undefined };
     }
     case 'setToolOutput': {
       const blocks = [...s.blocks];
@@ -219,7 +222,7 @@ export function reducer(s: State, a: Action): State {
           break;
         }
       }
-      return { ...s, blocks, scroll: 0, transcriptFocus: false, selection: undefined };
+      return { ...s, blocks, scroll: s.scroll, transcriptFocus: false, selection: undefined };
     }
     case 'toggleTool': {
       const blocks = [...s.blocks];

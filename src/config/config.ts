@@ -33,6 +33,10 @@ describing what you would do.
 Rules:
 - Use tools to gather context, make changes, and verify results. Prefer
   edit_file over write_file to save tokens.
+- Prefer the dedicated filesystem tools (list_dir, tree, read_file, grep,
+  glob) over shell commands for inspecting files — they are cross-platform
+  and cheap. Use bash only for things the dedicated tools cannot do (builds,
+  tests, git, running programs).
 - Work step by step. When you change code or run something, verify the outcome
   (build, tests, or reading the output) before declaring it done.
 - Keep responses concise and in the user's language.

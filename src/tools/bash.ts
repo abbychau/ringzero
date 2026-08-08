@@ -1,6 +1,4 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import type { Tool } from '../kernel/types.js';
 
 const MAX_OUTPUT_CHARS = 100_000;
@@ -108,7 +106,9 @@ export function bashTool(): Tool {
       name: 'bash',
       description:
         'Run a shell command in the project directory. Combine stdout+stderr. Times out (default 60s). This tool requires permission.' +
-        (isWin ? ' Shell: POSIX bash (git-bash) when available, otherwise cmd.exe.' : ''),
+        (isWin
+          ? ' Shell: cmd.exe (Windows). Prefer the dedicated fs tools (list_dir, read_file, grep, glob) over shell commands.'
+          : ''),
       inputSchema: {
         type: 'object',
         properties: {
@@ -134,25 +134,6 @@ export function bashTool(): Tool {
 }
 
 const isWin = process.platform === 'win32';
-
-/** Locate a POSIX bash on Windows (git-bash's bash.exe). */
-function findBash(): string | null {
-  const candidates = [
-    'C:\\Program Files\\Git\\bin\\bash.exe',
-    'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
-    'C:\\Program Files\\Git\\usr\\bin\\bash.exe',
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-  // PATH lookup (e.g. msys2, scoop).
-  for (const dir of (process.env.PATH ?? '').split(';')) {
-    if (!dir) continue;
-    const p = join(dir, 'bash.exe');
-    if (existsSync(p)) return p;
-  }
-  return null;
-}
 
 /**
  * Kill the whole process tree: on POSIX the child is spawned detached (own
@@ -182,20 +163,18 @@ export function runCommand(
   signal?: AbortSignal,
 ): Promise<string> {
   return new Promise((resolvePromise, reject) => {
-    // On Windows prefer POSIX bash (git-bash) so the model's Unix commands
-    // (ls, pwd, tail, …) work; fall back to cmd.exe (shell:true) when bash is
-    // not installed. bash -lc also makes child output UTF-8, which avoids the
-    // legacy-codepage mojibake entirely.
-    const bash = isWin ? findBash() : null;
-    const spawnOpts = {
+    // Cross-platform: spawn through the platform's default shell (cmd.exe on
+    // Windows — present on every machine, unlike git-bash). FS operations are
+    // done by the native tools (list_dir/read_file/grep/…) instead of the
+    // shell, so the shell only runs what the dedicated tools can't.
+    const child = spawn(command, {
       cwd,
-      shell: !bash,
+      shell: true,
       windowsHide: true,
       detached: !isWin,
       env: { ...sanitizeEnv(), FORCE_COLOR: '0', NO_COLOR: '1' },
       signal,
-    };
-    const child = bash ? spawn(bash, ['-lc', command], spawnOpts) : spawn(command, spawnOpts);
+    });
     const chunks: Buffer[] = [];
     let bytes = 0;
     let settled = false;
