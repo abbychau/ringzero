@@ -1,0 +1,5 @@
+# Bun configuration
+# Aliases for the standalone build: ink's optional react-devtools-core peer
+# is swapped for a no-op stub so `bun build --compile` stays self-contained.
+[alias]
+react-devtools-core = "./scripts/react-devtools-stub.js"

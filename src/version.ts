@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
 
+/**
+ * Build-time version, injected by the standalone build (bun build --define).
+ * Normal builds fall back to reading package.json at runtime.
+ */
+declare const __RINGZERO_VERSION__: string | undefined;
+
 function readVersion(): string {
   try {
     const pkg = JSON.parse(
@@ -13,4 +19,5 @@ function readVersion(): string {
   }
 }
 
-export const VERSION = readVersion();
+export const VERSION =
+  typeof __RINGZERO_VERSION__ === 'string' ? __RINGZERO_VERSION__ : readVersion();

@@ -153,9 +153,8 @@ app: {
   }
 
   if (version) {
-    const { readFileSync } = await import('node:fs');
-    const pkg = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
-    console.log(`ringzero ${pkg.version ?? '0.0.0'}`);
+    const { VERSION } = await import('../version.js');
+    console.log(`ringzero ${VERSION}`);
     process.exit(0);
   }
 
