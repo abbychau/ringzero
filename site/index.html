@@ -706,6 +706,7 @@
               </button>
               <button class="tab" data-os="macos" role="tab" aria-selected="false">macOS</button>
               <button class="tab" data-os="linux" role="tab" aria-selected="false">Linux</button>
+              <button class="tab" data-os="npm" role="tab" aria-selected="false">npm</button>
             </div>
             <div class="install" data-os="windows" role="tabpanel">
               <span class="cmd"
@@ -736,6 +737,10 @@
               >
                 Copy
               </button>
+            </div>
+            <div class="install" data-os="npm" role="tabpanel" hidden>
+              <span class="cmd"><span class="ps">$</span>npm i -g ringzero</span>
+              <button class="copy-btn" data-copy="npm i -g ringzero">Copy</button>
             </div>
           </div>
           <p class="install-note">
