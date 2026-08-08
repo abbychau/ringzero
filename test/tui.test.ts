@@ -20,6 +20,22 @@ test('truncateWidth respects double-width', () => {
   assert.equal(truncateWidth('abcde', 4), 'abcd');
 });
 
+test('widths match Ink for wide glyphs the old ranges missed', () => {
+  // The hand-rolled ranges undercounted some wide glyphs (e.g. 🀄 U+1F004), so
+  // rows came out narrower than Ink renders them → Ink re-wrapped → layout
+  // overflow. string-width is the library Ink itself renders with, so our
+  // measurements now agree with it by construction.
+  assert.equal(strWidth('🀄'), 2); // mahjong tile U+1F004 (was 1)
+  assert.equal(strWidth('🀄中'), 4);
+  // Combining marks and VS16 are zero-width, exactly like Ink counts them
+  // (the old ranges counted them as 1).
+  assert.equal(strWidth('e\u0301'), 1);
+  assert.equal(strWidth('\uFE0F'), 0);
+  // wrapText never produces a row wider than requested, even for the above.
+  for (const l of wrapText('🀄🀄🀄🀄🀄', 6)) assert.ok(strWidth(l) <= 6);
+  assert.equal(truncateWidth('🀄🀄🀄', 3), '🀄');
+});
+
 test('KeyReader parses arrows, ctrl, ascii and CJK chars', () => {
   const r = new KeyReader();
   r.push(Buffer.from('\x1b[A'));

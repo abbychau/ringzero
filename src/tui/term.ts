@@ -1,5 +1,6 @@
 /** Zero-dependency terminal primitives: raw mode, ANSI, key parsing, CJK width. */
 import process from 'node:process';
+import stringWidth from 'string-width';
 
 export type Key =
   | { type: 'char'; char: string }
@@ -69,33 +70,20 @@ export function style(
   return `\x1b[${codes.join(';')}m${s}\x1b[0m`;
 }
 
-/** Terminal display width of a string (CJK/fullwidth = 2). */
+/**
+ * Terminal display width of a single character (CJK/fullwidth/emoji = 2,
+ * combining/ZWJ = 0). Uses `string-width` — the same library Ink renders with
+ * — so our wrapping/truncation always matches what the terminal actually
+ * lays out. The hand-rolled wcwidth ranges before this missed several wide
+ * blocks (e.g. 🀄 U+1F004, 〿 U+303F), which made rows wrap differently than
+ * Ink and broke the layout.
+ */
 export function charWidth(ch: string): number {
-  const code = ch.codePointAt(0)!;
-  if (code < 0x20 || code === 0x7f) return 0;
-  if (
-    (code >= 0x1100 && code <= 0x115f) ||
-    code === 0x2329 ||
-    code === 0x232a ||
-    (code >= 0x2e80 && code <= 0xa4cf && code !== 0x303f) ||
-    (code >= 0xac00 && code <= 0xd7a3) ||
-    (code >= 0xf900 && code <= 0xfaff) ||
-    (code >= 0xfe10 && code <= 0xfe19) ||
-    (code >= 0xfe30 && code <= 0xfe6f) ||
-    (code >= 0xff00 && code <= 0xff60) ||
-    (code >= 0xffe0 && code <= 0xffe6) ||
-    (code >= 0x1f300 && code <= 0x1faff) ||
-    (code >= 0x20000 && code <= 0x3fffd)
-  ) {
-    return 2;
-  }
-  return 1;
+  return stringWidth(ch);
 }
 
 export function strWidth(s: string): number {
-  let w = 0;
-  for (const ch of s) w += charWidth(ch);
-  return w;
+  return stringWidth(s);
 }
 
 /** Wrap text to a display width, respecting CJK double-width chars. */
@@ -110,7 +98,7 @@ export function wrapText(s: string, width: number): string[] {
     let cur = '';
     let w = 0;
     for (const ch of raw) {
-      const cw = charWidth(ch);
+      const cw = stringWidth(ch);
       if (w + cw > width && cur !== '') {
         out.push(cur);
         cur = '';
@@ -128,7 +116,7 @@ export function truncateWidth(s: string, width: number): string {
   let out = '';
   let w = 0;
   for (const ch of s) {
-    const cw = charWidth(ch);
+    const cw = stringWidth(ch);
     if (w + cw > width) break;
     out += ch;
     w += cw;
@@ -144,7 +132,7 @@ export function colToCharIndex(text: string, col: number): number {
   if (col <= 0) return 0;
   let w = 0;
   for (let i = 0; i < text.length; i++) {
-    const cw = charWidth(text[i]!);
+    const cw = stringWidth(text[i]!);
     if (w + cw > col) return i;
     w += cw;
   }
