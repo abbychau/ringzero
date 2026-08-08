@@ -435,11 +435,11 @@ export function slashMatches(input: string, extra: string[] = []): string[] {
 const TOOL_PREVIEW_LINES = 3;
 const THINKING_PREVIEW_CHARS = 160;
 const PREFIX: Record<Block['tag'], string> = {
-  user: '› ',
+  user: '[user] ',
   assistant: '',
-  thinking: '💭 ',
-  tool: '⛏ ',
-  sys: '— ',
+  thinking: '[thinking] ',
+  tool: '[tool-call] ',
+  sys: '[sys] ',
 };
 
 export interface Row {
@@ -448,7 +448,7 @@ export interface Row {
 }
 
 function toolLines(b: Extract<Block, { tag: 'tool' }>): string[] {
-  const head = `⛏ ${b.name} ${truncateWidth(b.args.replace(/\s+/g, ' '), 40)}`;
+  const head = `[tool-call] ${b.name} ${truncateWidth(b.args.replace(/\s+/g, ' '), 40)}`;
   if (!b.output) return [head + (b.done ? '' : ' …')];
   if (!b.expanded) {
     const lines = b.output.split('\n');

@@ -130,7 +130,7 @@ function sidebarContent(
     { text: model, color: 'cyan', bold: true },
     ...(sessionId ? [{ text: `${sessionId.slice(0, 20)}`, dim: true }] : []),
     ...(state.flash && Date.now() - state.flash.at < FLASH_MS
-      ? [{ text: `✓ ${state.flash.text}`, color: 'green' as const, bold: true }]
+      ? [{ text: `[ok] ${state.flash.text}`, color: 'green' as const, bold: true }]
       : []),
   ];
   if (state.planMode || state.yolo || state.pendingImage) {

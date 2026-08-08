@@ -398,7 +398,7 @@ export function App({
         if (agentRef.current?.inject(line)) {
           dispatch({ type: 'submit', text: line });
           dispatch({ type: 'push', block: { tag: 'user', text: line } });
-          pushSys(`✂ injected mid-run: ${line.slice(0, 60)}${line.length > 60 ? '…' : ''}`);
+          pushSys(`[inject] ${line.slice(0, 60)}${line.length > 60 ? '…' : ''}`);
         }
         return;
       }
@@ -978,8 +978,8 @@ export function App({
               ) : (
                 <Text dimColor>
                   {' '}
-                  📋 {state.todos.filter((t) => t.done).length}/{state.todos.length} done — Ctrl+T
-                  to expand
+                  [todos] {state.todos.filter((t) => t.done).length}/{state.todos.length} done —
+                  Ctrl+T to expand
                 </Text>
               )}
             </Box>
