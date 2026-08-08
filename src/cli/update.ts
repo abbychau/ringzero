@@ -9,8 +9,8 @@
  *   - macOS/Linux portable dir (~/.local/share/ringzero): the whole install dir
  *     is renamed aside and the freshly extracted zip moved in; a detached
  *     process removes the old dir shortly after.
- *   - Anything else (dev checkout, ad-hoc copy): prints guidance to re-run the
- *     one-line installer.
+ *   - Anything else (dev checkout, ad-hoc copy, npm install): prints guidance
+ *     (npm installs upgrade via `npm i -g ringzero@latest`, not self-update).
  *
  * Zero runtime deps: uses global fetch for the GitHub API + the minimal
  * `../util/unzip.js` reader for the portable zip.
@@ -27,6 +27,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { VERSION } from '../version.js';
 import { extractZip } from '../util/unzip.js';
 
@@ -67,7 +68,7 @@ export function assetFor(
 }
 
 export interface InstallInfo {
-  kind: 'exe' | 'dir' | 'unknown';
+  kind: 'exe' | 'dir' | 'npm' | 'unknown';
   target?: string;
 }
 
@@ -92,6 +93,10 @@ function findOnPath(name: string): string | null {
  * from that.
  */
 export function detectInstall(): InstallInfo {
+  // npm global install: this module lives under <prefix>/node_modules/ringzero.
+  const here = fileURLToPath(import.meta.url);
+  if (/[\\/]node_modules[\\/]ringzero[\\/]/.test(here)) return { kind: 'npm' };
+
   const exe = process.execPath;
   const dir = dirname(exe);
   const base = basename(exe);
@@ -245,6 +250,17 @@ export async function runUpdate(): Promise<number> {
     console.log(`You're up to date (${release.version}).`);
     return 0;
   }
+
+  // npm installs update through npm, not self-update. Checked before the
+  // asset gate so npm users never see "no prebuilt asset for <platform>".
+  if (info.kind === 'npm') {
+    console.log('');
+    console.log(`A newer version (${release.version}) is available.`);
+    console.log('You installed RingZero via npm — upgrade with:');
+    console.log('  npm i -g ringzero@latest');
+    return 1;
+  }
+
   if (!asset) {
     console.error(
       `A newer version (${release.version}) exists, but there is no prebuilt asset for ` +

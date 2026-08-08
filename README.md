@@ -90,6 +90,9 @@ npm i -g ringzero
 ringzero
 ```
 
+Upgrade: `npm i -g ringzero@latest` (npm) &middot; `ringzero --update`
+(exe / portable-zip installs) &middot; or re-run the one-liner.
+
 Build from source:
 
 ```bash
