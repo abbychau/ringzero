@@ -101,14 +101,17 @@ export function sanitizeEnv(): Record<string, string | undefined> {
 }
 
 export function bashTool(): Tool {
+  const shellNote = hasBunShell()
+    ? ' Shell: POSIX (bun shell) — ls, pwd, grep, tail and pipes work on every platform.'
+    : isWin
+      ? ' Shell: cmd.exe (Windows). Prefer the dedicated fs tools (list_dir, read_file, grep, glob) over shell commands.'
+      : ' Shell: /bin/sh (POSIX).';
   return {
     definition: {
       name: 'bash',
       description:
         'Run a shell command in the project directory. Combine stdout+stderr. Times out (default 60s). This tool requires permission.' +
-        (isWin
-          ? ' Shell: cmd.exe (Windows). Prefer the dedicated fs tools (list_dir, read_file, grep, glob) over shell commands.'
-          : ''),
+        shellNote,
       inputSchema: {
         type: 'object',
         properties: {
