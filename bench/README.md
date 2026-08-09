@@ -22,7 +22,7 @@ harbor run -d terminal-bench/terminal-bench-2 `
   --ak "ringzero_dist=C:\Repos\ringzero\dist" `
   --ae "API_URL=$url" --ae "API_KEY=$key" --ae MODEL=deepseek-v4-flash `
   --ae MAX_STEPS=77 --ae EFFORT=medium `
-  --jobs-dir jobs-tb2-full -n 4 --yes
+  --jobs-dir bench/jobs/jobs-tb2-full -n 4 --yes
 ```
 
 - No `--include-task-name` → runs ALL tasks. `-n 4` = 4 concurrent sandboxes.
@@ -31,15 +31,15 @@ harbor run -d terminal-bench/terminal-bench-2 `
 
 ## Monitor
 
-- Job dir: `jobs-tb2-full\<timestamp>\result.json` (rewritten as trials finish)
+- Job dir: `bench/jobs/jobs-tb2-full\<timestamp>\result.json` (rewritten as trials finish)
 - `harbor view jobs` — summary table
-- Per trial: `jobs-tb2-full\<ts>\<task>__<id>\{trial.log, exception.txt}`
+- Per trial: `bench/jobs/jobs-tb2-full\<ts>\<task>__<id>\{trial.log, exception.txt}`
 - Per-trial reward: parse `result.json` → `stats.evals["ringzero__terminal-bench/terminal-bench-2"].reward_stats.reward`
 
 ## Submit to leaderboard
 
 Per tbench.ai: open a PR to the HF repo `alexgshaw/terminal-bench-2-leaderboard`
-with the job logs (needs your HF account). `harbor upload jobs-tb2-full\<ts>`
+with the job logs (needs your HF account). `harbor upload bench/jobs/jobs-tb2-full\<ts>`
 shares the results. A new submission process is also listed as "coming soon".
 
 ## Notes / gotchas
