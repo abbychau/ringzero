@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'site/**'
+      - 'install.sh'
+      - 'install.ps1'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -29,6 +31,11 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Sync installers into the site
+        shell: bash
+        run: |
+          cp install.sh install.ps1 site/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
