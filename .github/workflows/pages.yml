@@ -7,6 +7,8 @@ on:
       - 'site/**'
       - 'install.sh'
       - 'install.ps1'
+      - 'uninstall.sh'
+      - 'uninstall.ps1'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -35,7 +37,7 @@ jobs:
       - name: Sync installers into the site
         shell: bash
         run: |
-          cp install.sh install.ps1 site/
+          cp install.sh install.ps1 uninstall.sh uninstall.ps1 site/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
