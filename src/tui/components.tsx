@@ -57,7 +57,10 @@ export function TranscriptRow({
 }
 
 function Spinner(): React.JSX.Element {
-  const { frame } = useAnimation({ interval: 80 });
+  // 160ms instead of 80ms: full-frame re-renders on every tick are the
+  // heaviest write load the TUI produces while streaming; on slower consoles
+  // (and under the compiled binary) aggressive repaints can garble the frame.
+  const { frame } = useAnimation({ interval: 160 });
   const chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   return <Text color="cyan">{chars[frame % chars.length]!}</Text>;
 }
