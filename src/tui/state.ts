@@ -7,7 +7,16 @@ export type Block =
   | { tag: 'user'; text: string }
   | { tag: 'assistant'; text: string }
   | { tag: 'thinking'; text: string; expanded: boolean }
-  | { tag: 'tool'; name: string; args: string; output?: string; done: boolean; expanded: boolean }
+  | {
+      tag: 'tool';
+      name: string;
+      args: string;
+      output?: string;
+      done: boolean;
+      expanded: boolean;
+      /** Tool call id so parallel same-name calls get their own results. */
+      callId?: string;
+    }
   | { tag: 'sys'; text: string };
 
 export type AskResponse = 'yes' | 'no' | 'always' | 'never';
@@ -101,7 +110,7 @@ export type Action =
   | { type: 'push'; block: Block }
   | { type: 'appendAssistant'; delta: string }
   | { type: 'appendThinking'; delta: string }
-  | { type: 'setToolOutput'; output: string; done: boolean; name?: string }
+  | { type: 'setToolOutput'; output: string; done: boolean; name?: string; callId?: string }
   | { type: 'toggleTool'; index?: number }
   | { type: 'input'; text: string; cursor: number }
   | { type: 'submit'; text: string }
@@ -213,11 +222,18 @@ export function reducer(s: State, a: Action): State {
     }
     case 'setToolOutput': {
       const blocks = [...s.blocks];
-      // Match by name (last matching, not-yet-done block) so concurrent tool calls
-      // render each result on the right row. Falls back to the last tool block.
+      // Match by call id first (parallel same-name calls keep their own
+      // results), then by name (last matching, not-yet-done block) for events
+      // that predate call ids. Falls back to the last tool block.
       for (let i = blocks.length - 1; i >= 0; i--) {
         const b = blocks[i]!;
-        if (b.tag === 'tool' && (a.name === undefined || (b.name === a.name && !b.done))) {
+        if (b.tag !== 'tool' || b.done) continue;
+        if (a.callId !== undefined) {
+          if (b.callId === a.callId) {
+            blocks[i] = { ...b, output: a.output, done: a.done };
+            break;
+          }
+        } else if (a.name === undefined || b.name === a.name) {
           blocks[i] = { ...b, output: a.output, done: a.done };
           break;
         }

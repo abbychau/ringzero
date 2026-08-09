@@ -43,6 +43,53 @@ test('reducer tool output + toggle expand', () => {
   assert.equal(tool.expanded, true);
 });
 
+test('reducer matches parallel same-name tool results by callId', () => {
+  // Two concurrent read_file calls must each get their own output, not the
+  // other call's (name-only matching crossed them).
+  let s = initial('m');
+  s = reducer(s, {
+    type: 'push',
+    block: {
+      tag: 'tool',
+      name: 'read_file',
+      args: '{"path":"a"}',
+      done: false,
+      expanded: false,
+      callId: 'c1',
+    },
+  });
+  s = reducer(s, {
+    type: 'push',
+    block: {
+      tag: 'tool',
+      name: 'read_file',
+      args: '{"path":"b"}',
+      done: false,
+      expanded: false,
+      callId: 'c2',
+    },
+  });
+  s = reducer(s, {
+    type: 'setToolOutput',
+    output: 'content-a',
+    done: true,
+    name: 'read_file',
+    callId: 'c2',
+  });
+  s = reducer(s, {
+    type: 'setToolOutput',
+    output: 'content-b',
+    done: true,
+    name: 'read_file',
+    callId: 'c1',
+  });
+  const blocks = s.blocks as Extract<Block, { tag: 'tool' }>[];
+  assert.equal(blocks[0]!.output, 'content-b');
+  assert.equal(blocks[1]!.output, 'content-a');
+  assert.equal(blocks[0]!.done, true);
+  assert.equal(blocks[1]!.done, true);
+});
+
 test('reducer history + clear', () => {
   let s = initial('m');
   s = reducer(s, { type: 'submit', text: 'first' });

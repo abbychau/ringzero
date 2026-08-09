@@ -281,10 +281,23 @@ export function App({
           else if (ev.type === 'tool_start')
             dispatch({
               type: 'push',
-              block: { tag: 'tool', name: ev.name, args: ev.args, done: false, expanded: false },
+              block: {
+                tag: 'tool',
+                name: ev.name,
+                args: ev.args,
+                done: false,
+                expanded: false,
+                callId: ev.callId,
+              },
             });
           else if (ev.type === 'tool_result') {
-            dispatch({ type: 'setToolOutput', output: ev.output, done: true, name: ev.name });
+            dispatch({
+              type: 'setToolOutput',
+              output: ev.output,
+              done: true,
+              name: ev.name,
+              callId: ev.callId,
+            });
             if (ev.name === 'todo')
               dispatch({ type: 'setTodos', todos: runnerRef.current.listTodos() });
           } else if (ev.type === 'permission' && !ev.allowed)

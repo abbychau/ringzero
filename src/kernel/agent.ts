@@ -74,8 +74,8 @@ const INTERRUPT = { interrupt: true as const };
 export type AgentEvent =
   | { type: 'text'; text: string }
   | { type: 'thinking'; text: string }
-  | { type: 'tool_start'; name: string; args: string }
-  | { type: 'tool_result'; name: string; output: string; truncated: boolean }
+  | { type: 'tool_start'; name: string; args: string; callId: string }
+  | { type: 'tool_result'; name: string; output: string; truncated: boolean; callId: string }
   | { type: 'permission'; name: string; allowed: boolean }
   | { type: 'compacting' }
   | { type: 'injected'; text: string }
@@ -438,7 +438,7 @@ export class Agent {
         const tool = this.tools.find((t) => t.definition.name === call.name);
         if (!tool) {
           // Unknown tools still surface in the event stream so the UI shows them.
-          yield emit({ type: 'tool_start', name: call.name, args: call.args });
+          yield emit({ type: 'tool_start', name: call.name, args: call.args, callId: call.id });
           push({
             id: newId('msg'),
             role: 'tool',
@@ -452,6 +452,7 @@ export class Agent {
             name: call.name,
             output: `unknown tool: ${call.name}`,
             truncated: false,
+            callId: call.id,
           });
           continue;
         }
@@ -462,7 +463,12 @@ export class Agent {
           if (r?.allowed === false) blocked = true;
           else if (r?.args) args = r.args;
         }
-        yield emit({ type: 'tool_start', name: call.name, args: redact(call.args) });
+        yield emit({
+          type: 'tool_start',
+          name: call.name,
+          args: redact(call.args),
+          callId: call.id,
+        });
         if (blocked) {
           push({
             id: newId('msg'),
@@ -478,6 +484,7 @@ export class Agent {
             name: call.name,
             output: '[blocked by plugin]',
             truncated: false,
+            callId: call.id,
           });
           continue;
         }
@@ -505,6 +512,7 @@ export class Agent {
             name: call.name,
             output: PLAN_BLOCK_TEXT,
             truncated: false,
+            callId: call.id,
           });
           continue;
         }
@@ -530,6 +538,7 @@ export class Agent {
             name: call.name,
             output: '[permission denied by user]',
             truncated: false,
+            callId: call.id,
           });
           continue;
         }
@@ -609,6 +618,7 @@ export class Agent {
           name: call.name,
           output: truncated,
           truncated: wasTruncated,
+          callId: call.id,
         });
       }
 

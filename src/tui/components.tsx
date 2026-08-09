@@ -153,7 +153,12 @@ function sidebarContent(
       text: `ctx ${(state.ctxTokens / 1000).toFixed(1)}k / ${budget !== undefined ? fmtBudget(budget) : '?'}`,
       dim: true,
     });
-    rows.push({ text: '█'.repeat(fill) + '░'.repeat(Math.max(0, contentW - fill)), dim: true });
+    // ASCII bar (not █░): block elements are ambiguous-width and some
+    // terminals render them 2 columns wide, which overflows the sidebar.
+    rows.push({
+      text: '#'.repeat(fill) + '-'.repeat(Math.max(0, contentW - fill)),
+      dim: true,
+    });
   }
   const usage = state.usage;
   const totalUsage = state.totalUsage;
@@ -282,17 +287,20 @@ export function Sidebar({
         }
         const padW = Math.max(0, limit - strWidth(text));
         return r.spinner ? (
-          <Text key={i} dimColor>
+          <Text key={i} dimColor wrap="truncate">
             {'│ '}
             {state.running ? <Spinner /> : <Text dimColor>●</Text>} {inner}
             {' '.repeat(padW)}
           </Text>
         ) : (
           // The separator is its own dim Text so the content's closing codes
-          // (e.g. SGR 22 resets both bold and dim) can't un-dim it.
+          // (e.g. SGR 22 resets both bold and dim) can't un-dim it. wrap
+          // truncate on the content only: a glyph the terminal renders wider
+          // than string-width (ambiguous block/emoji chars) would otherwise
+          // wrap the row and break the sidebar.
           <Box key={i} flexDirection="row">
             <Text dimColor>{'│ '}</Text>
-            <Text color={r.color} dimColor={r.dim} bold={r.bold}>
+            <Text color={r.color} dimColor={r.dim} bold={r.bold} wrap="truncate">
               {inner}
               {' '.repeat(padW)}
             </Text>
