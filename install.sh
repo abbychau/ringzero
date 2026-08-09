@@ -66,7 +66,11 @@ if [ -z "$asset_url" ]; then
   echo "Could not find $asset in the latest release." >&2
   exit 1
 fi
-version="$(printf '%s' "$release_json" | grep -o '"tag_name": *"[^"]*"' | head -n 1 | sed 's/.*"v\?//; s/"$//')"
+version="$(printf '%s' "$release_json" | sed -n 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/p' | head -n 1)"
+if [ -z "$version" ]; then
+  echo "Could not determine the release version." >&2
+  exit 1
+fi
 
 # --- download & unpack ------------------------------------------------------
 tmp="$(mktemp -d)"
