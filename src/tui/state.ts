@@ -117,7 +117,7 @@ export type Action =
   | { type: 'runStart' }
   | { type: 'runEnd'; usage?: Usage; status: string; ctx?: number }
   | { type: 'status'; text: string }
-  | { type: 'scroll'; delta: number }
+  | { type: 'scroll'; delta: number; maxScroll?: number }
   | { type: 'setTranscriptFocus'; focus: boolean }
   | { type: 'setSelection'; selection: Selection | undefined }
   | { type: 'suggestIdx'; index: number }
@@ -291,7 +291,13 @@ export function reducer(s: State, a: Action): State {
     case 'status':
       return { ...s, status: a.text };
     case 'scroll':
-      return { ...s, scroll: Math.max(0, s.scroll + a.delta) };
+      // Clamp both ends: 0 = bottom, maxScroll = top. Without the upper clamp
+      // the state could grow past the available transcript and scrolling back
+      // down took as many steps as were accumulated.
+      return {
+        ...s,
+        scroll: Math.max(0, Math.min(s.scroll + a.delta, a.maxScroll ?? Number.POSITIVE_INFINITY)),
+      };
     case 'setTranscriptFocus':
       return { ...s, transcriptFocus: a.focus };
     case 'setSelection':

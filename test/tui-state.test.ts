@@ -332,6 +332,21 @@ test('reducer scroll clamps at 0', () => {
   assert.equal(s.scroll, 0);
 });
 
+test('reducer scroll clamps at maxScroll (the top)', () => {
+  let s = initial('m');
+  // Without the upper clamp, scrolling up past the transcript kept growing
+  // the scroll state and scrolling back down took as many steps.
+  s = reducer(s, { type: 'scroll', delta: 100, maxScroll: 30 });
+  assert.equal(s.scroll, 30);
+  s = reducer(s, { type: 'scroll', delta: 5, maxScroll: 30 });
+  assert.equal(s.scroll, 30, 'stays clamped at the top');
+  s = reducer(s, { type: 'scroll', delta: -5, maxScroll: 30 });
+  assert.equal(s.scroll, 25);
+  // No maxScroll (old callers) keeps the old behavior.
+  s = reducer(s, { type: 'scroll', delta: 999 });
+  assert.equal(s.scroll, 1024);
+});
+
 test('reducer keeps scroll position when new content arrives while scrolled up', () => {
   let s = initial('m');
   s = reducer(s, { type: 'scroll', delta: 5 });

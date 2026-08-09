@@ -154,6 +154,7 @@ export function App({
     headerH: number;
     /** Selectable text lines of the sidebar (empty when hidden). */
     sidebarRows: Row[];
+    maxScroll: number;
   }>({
     start: 0,
     visible: [],
@@ -161,6 +162,7 @@ export function App({
     mainW: 0,
     headerH: 1,
     sidebarRows: [],
+    maxScroll: 0,
   });
   /** Mouse-down position while dragging: { pane, row, col, moved }. */
   const dragRef = useRef<{
@@ -226,6 +228,7 @@ export function App({
     mainW,
     headerH,
     sidebarRows,
+    maxScroll: win.maxScroll,
   };
 
   const pushSys = useCallback(
@@ -648,20 +651,20 @@ export function App({
         return;
       }
       if (key.upArrow) {
-        dispatch({ type: 'scroll', delta: 1 });
+        dispatch({ type: 'scroll', delta: 1, maxScroll: win.maxScroll });
         return;
       }
       if (key.downArrow) {
-        dispatch({ type: 'scroll', delta: -1 });
+        dispatch({ type: 'scroll', delta: -1, maxScroll: win.maxScroll });
         if (s.scroll - 1 <= 0) dispatch({ type: 'setTranscriptFocus', focus: false });
         return;
       }
       if (key.pageUp) {
-        dispatch({ type: 'scroll', delta: 5 });
+        dispatch({ type: 'scroll', delta: 5, maxScroll: win.maxScroll });
         return;
       }
       if (key.pageDown) {
-        dispatch({ type: 'scroll', delta: -5 });
+        dispatch({ type: 'scroll', delta: -5, maxScroll: win.maxScroll });
         if (s.scroll - 5 <= 0) dispatch({ type: 'setTranscriptFocus', focus: false });
         return;
       }
@@ -765,8 +768,8 @@ export function App({
       slashItems.length > 1
         ? dispatch({ type: 'suggestIdx', index: Math.min(slashItems.length - 1, s.suggestIdx + 1) })
         : dispatch({ type: 'history', index: Math.min(s.history.length, s.histIdx + 1) });
-    else if (key.pageUp) dispatch({ type: 'scroll', delta: 5 });
-    else if (key.pageDown) dispatch({ type: 'scroll', delta: -5 });
+    else if (key.pageUp) dispatch({ type: 'scroll', delta: 5, maxScroll: win.maxScroll });
+    else if (key.pageDown) dispatch({ type: 'scroll', delta: -5, maxScroll: win.maxScroll });
     else if (input)
       setInput(
         s.input.slice(0, s.cursor) + input + s.input.slice(s.cursor),
@@ -829,7 +832,7 @@ export function App({
         if (!inMain || !inTranscript) return;
         const d = wheelDelta(e.button);
         if (d) {
-          dispatch({ type: 'scroll', delta: d });
+          dispatch({ type: 'scroll', delta: d, maxScroll: lay.maxScroll });
           dispatch({ type: 'setTranscriptFocus', focus: true });
         }
       } else if (e.type === 'down') {
