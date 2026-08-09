@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { homedir } from 'node:os';
-import { sanitizeEnv, bashTool, decodeOutput } from '../src/tools/bash.js';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { sanitizeEnv, bashTool, decodeOutput, runCommand } from '../src/tools/bash.js';
 import type { ToolContext } from '../src/kernel/types.js';
 
 const ctx: ToolContext = {
@@ -148,4 +151,74 @@ test('bash tool decodes legacy-encoded CJK output (GBK)', async () => {
   } finally {
     delete process.env.RINGZERO_OS_ENCODING;
   }
+});
+
+// --- runCommand: exercised under node (native spawn) and bun (bun shell) ---
+
+/** A node script that appends to count.txt and prints how many times it ran. */
+function counterScript(): string {
+  return [
+    "const fs = require('node:fs');",
+    "const { join } = require('node:path');",
+    "fs.appendFileSync(join(__dirname, 'count.txt'), 'x');",
+    "const n = fs.readFileSync(join(__dirname, 'count.txt'), 'utf8').trim().length;",
+    "console.log('RAN-' + n);",
+    '',
+  ].join('\n');
+}
+
+test('runCommand executes the command exactly once', async () => {
+  // Regression: the bun-shell path used to start a second task() from the
+  // timeout setup, so commands ran twice (verify hooks counted 2 on the first
+  // run).
+  const dir = mkdtempSync(join(tmpdir(), 'rz-runonce-'));
+  writeFileSync(join(dir, 'counter.cjs'), counterScript());
+  try {
+    const out = await runCommand('node counter.cjs', dir, 30_000);
+    assert.ok(out.includes('RAN-1'), `expected RAN-1, got: ${JSON.stringify(out)}`);
+    assert.equal(readFileSync(join(dir, 'count.txt'), 'utf8').trim(), 'x');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('runCommand appends the exit code on failure', async () => {
+  const out = await runCommand('node -e "process.exit(7)"', process.cwd(), 30_000);
+  assert.ok(out.includes('[exit code 7]'), `got: ${JSON.stringify(out)}`);
+  const ok = await runCommand('node -e "console.log(42)"', process.cwd(), 30_000);
+  assert.ok(ok.includes('42'), `got: ${JSON.stringify(ok)}`);
+  assert.ok(!ok.includes('exit code'), `got: ${JSON.stringify(ok)}`);
+});
+
+test('runCommand combines stdout and stderr', async () => {
+  const out = await runCommand(
+    'node -e "process.stdout.write(\"OUT\"); process.stderr.write(\"ERR\")"',
+    process.cwd(),
+    30_000,
+  );
+  assert.ok(out.includes('OUT') && out.includes('ERR'), `got: ${JSON.stringify(out)}`);
+});
+
+test('runCommand rejects on timeout', async () => {
+  await assert.rejects(
+    runCommand('node -e "setTimeout(() => {}, 5000)"', process.cwd(), 300),
+    /timed out after 300ms/,
+  );
+});
+
+test('runCommand rejects on abort', async () => {
+  const ac = new AbortController();
+  const p = runCommand('node -e "setTimeout(() => {}, 5000)"', process.cwd(), 30_000, ac.signal);
+  ac.abort();
+  await assert.rejects(p);
+});
+
+test('runCommand passes CJK output through (bun shell + node spawn)', async () => {
+  // 你好 as raw UTF-8 bytes so the command line stays ASCII on every shell.
+  const out = await runCommand(
+    'node -e "process.stdout.write(Buffer.from([0xe4,0xbd,0xa0,0xe5,0xa5,0xbd]))"',
+    process.cwd(),
+    30_000,
+  );
+  assert.equal(out, '你好');
 });
