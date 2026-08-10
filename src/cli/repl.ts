@@ -64,12 +64,12 @@ export async function runRepl(
   await runner.init();
 
   // Run one prompt turn and return why the agent loop ended.
-  const runPrompt = async (line: string): Promise<'done' | 'max_steps'> => {
+  const runPrompt = async (line: string): Promise<'done' | 'max_steps' | 'cap'> => {
     runner.ensureSession(title);
     const agent = runner.agent();
     runningAgent = agent;
     let usage: TokenUsage | undefined;
-    let reason: 'done' | 'max_steps' = 'done';
+    let reason: 'done' | 'max_steps' | 'cap' = 'done';
     const t0 = performance.now();
     try {
       for await (const ev of agent.run(line, {
@@ -80,10 +80,13 @@ export async function runRepl(
         else if (ev.type === 'permission' && !ev.allowed)
           process.stdout.write(`[denied: ${ev.name}]\n`);
         else if (ev.type === 'compacting') process.stdout.write('\n[compacting context…]\n');
+        else if (ev.type === 'cap_warn') process.stdout.write(`\n[${ev.message}]\n`);
         else if (ev.type === 'injected') process.stdout.write(`\n[✂ injected: ${ev.text}]\n`);
         else if (ev.type === 'finish') {
           usage = ev.usage;
           reason = ev.reason;
+          if (ev.reason === 'cap' && ev.status)
+            process.stdout.write(`\n[${ev.status}]\n`);
         }
       }
     } catch (err) {

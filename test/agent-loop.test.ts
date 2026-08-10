@@ -1024,3 +1024,63 @@ test('maxConcurrency: limit 1 serializes tool execution', async () => {
   );
   assert.equal(results.length, 3);
 });
+
+test('token cap aborts the run with a clear status and warns once at 80%', async () => {
+  // scriptedProvider reports {input:10, output:10} per chat → 20 tokens/call.
+  const provider = scriptedProvider((msgs) => {
+    if (!lastTool(msgs)) return { calls: [{ name: 'add', args: { a: 1, b: 2 } }] };
+    return { text: 'done' };
+  });
+  const agent = new Agent({ provider, tools: [add], permission: allowAll, tokenCap: 25 });
+  const { events } = await run(agent, 'add');
+  // Turn 1: 20 tokens → 80% warn (20 >= 20), continue; tool runs. Turn 2:
+  // 40 tokens → cap hit → abort before any further work.
+  const warns = events.filter((e): e is Extract<AgentEvent, { type: 'cap_warn' }> =>
+    e.type === 'cap_warn' ? true : false,
+  );
+  assert.equal(warns.length, 1, 'warning fires exactly once');
+  assert.match(warns[0]!.message, /token cap: 20 \/ 25 \(80%\)/);
+  const finish = events[events.length - 1] as Extract<AgentEvent, { type: 'finish' }>;
+  assert.equal(finish.reason, 'cap');
+  assert.match(finish.status ?? '', /token cap exceeded: 40 \/ 25/);
+  // No further tool work happened after the cap.
+  const toolStarts = events.filter((e) => e.type === 'tool_start');
+  assert.equal(toolStarts.length, 1);
+});
+
+test('cost cap aborts the run when cumulative cost exceeds the cap', async () => {
+  // gpt-4o-mini: input $0.15/1M, output $0.60/1M. One call of 10+10 tokens
+  // costs $0.0000075 — above 80% of an $0.000008 cap (warning) but below it;
+  // two calls cost $0.000015, over the cap (abort).
+  const provider = scriptedProvider((msgs) => {
+    if (!lastTool(msgs)) return { calls: [{ name: 'add', args: { a: 1, b: 2 } }] };
+    return { text: 'done' };
+  });
+  const agent = new Agent({
+    provider,
+    tools: [add],
+    permission: allowAll,
+    model: 'gpt-4o-mini',
+    costCap: 0.000008,
+  });
+  const { events } = await run(agent, 'add');
+  const finish = events[events.length - 1] as Extract<AgentEvent, { type: 'finish' }>;
+  assert.equal(finish.reason, 'cap');
+  assert.match(finish.status ?? '', /cost cap exceeded: .*0\.000015/);
+  // The 80% warning fired on turn 1 (0.0000075 >= 0.000008 * 0.8).
+  const warns = events.filter((e) => e.type === 'cap_warn');
+  assert.equal(warns.length, 1);
+  assert.match(warns[0]!.message, /\(80%\)/);
+});
+
+test('no caps configured: runs finish normally', async () => {
+  const agent = new Agent({
+    provider: scriptedProvider(() => ({ text: 'ok' })),
+    tools: [],
+    permission: allowAll,
+  });
+  const { events } = await run(agent, 'hi');
+  const finish = events[events.length - 1] as Extract<AgentEvent, { type: 'finish' }>;
+  assert.equal(finish.reason, 'done');
+  assert.equal(finish.status, undefined);
+});

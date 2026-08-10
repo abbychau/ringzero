@@ -1,5 +1,5 @@
 /** Pure state + reducer for the Ink TUI (testable without a TTY). */
-import { wrapText, truncateWidth, strWidth } from './term.js';
+import { wrapText, truncateWidth, strWidth, wrappedRows, INPUT_PREFIX } from './term.js';
 import type { TodoItem } from '../tools/todo.js';
 import type { ImageInput, SessionMessage } from '../kernel/types.js';
 
@@ -24,6 +24,8 @@ export type AskResponse = 'yes' | 'no' | 'always' | 'never';
 export interface Option {
   label: string;
   value: string;
+  /** Secondary description shown after the label (e.g. tool descriptions). */
+  desc?: string;
   hint?: string;
 }
 
@@ -92,6 +94,8 @@ export interface State {
   selection?: Selection;
   modal?: Modal;
   model: string;
+  /** Reasoning effort (low/medium/high/max), from /effort. */
+  effort?: 'low' | 'medium' | 'high' | 'max';
   /** Plan mode banner + gating (read-only until plan approved). */
   planMode: boolean;
   /** Yolo mode: all tools auto-allowed, no permission prompts. */
@@ -123,6 +127,7 @@ export type Action =
   | { type: 'suggestIdx'; index: number }
   | { type: 'setModal'; modal?: Modal }
   | { type: 'setModel'; model: string }
+  | { type: 'setEffort'; effort?: 'low' | 'medium' | 'high' | 'max' }
   | { type: 'setPlanMode'; planMode: boolean }
   | { type: 'setYolo'; yolo: boolean }
   | { type: 'setTodos'; todos: TodoItem[] }
@@ -134,7 +139,12 @@ export type Action =
   | { type: 'setBlocks'; blocks: Block[] }
   | { type: 'clear' };
 
-export function initial(model: string, planMode = false, yolo = false): State {
+export function initial(
+  model: string,
+  planMode = false,
+  yolo = false,
+  effort?: 'low' | 'medium' | 'high' | 'max',
+): State {
   return {
     blocks: [],
     input: '',
@@ -149,6 +159,7 @@ export function initial(model: string, planMode = false, yolo = false): State {
     model,
     planMode,
     yolo,
+    effort,
     todos: [],
     todosExpanded: false,
   };
@@ -306,6 +317,8 @@ export function reducer(s: State, a: Action): State {
       return { ...s, modal: a.modal };
     case 'setModel':
       return { ...s, model: a.model };
+    case 'setEffort':
+      return { ...s, effort: a.effort };
     case 'setPlanMode':
       return { ...s, planMode: a.planMode };
     case 'setYolo':
@@ -404,17 +417,16 @@ export function inputLineCol(value: string, cursor: number): { line: number; col
 
 /**
  * Number of RENDERED rows for the input (at least 1), including lines wrapped
- * at `width` columns. The ❯ prefix renders on line 0, so that line's text
- * starts 2 columns in. CJK/fullwidth chars count as 2 columns. The layout
- * must reserve exactly this many rows — underestimating lets Ink shrink the
- * transcript when the input wraps, cutting off its last rows.
+ * the way Ink wraps them (word-wrap with hard breaks — NOT uniform full-width
+ * rows). The ❯ prefix renders on line 0. The layout must reserve exactly this
+ * many rows — underestimating lets Ink shrink the transcript when the input
+ * wraps, cutting off its last rows.
  */
 export function inputLines(value: string, width: number): number {
   const lines = value.split('\n');
   let n = 0;
   for (let i = 0; i < lines.length; i++) {
-    const w = strWidth(lines[i]!) + (i === 0 ? 2 : 0);
-    n += Math.max(1, Math.ceil(w / Math.max(1, width)));
+    n += wrappedRows((i === 0 ? INPUT_PREFIX : '') + (lines[i] ?? ''), width);
   }
   return n;
 }
@@ -426,6 +438,8 @@ export function slashCommands(): string[] {
     'usage',
     'context',
     'model',
+    'effort',
+    'retry',
     'compact',
     'permission',
     'skills',
@@ -446,6 +460,34 @@ export function slashCommands(): string[] {
     'exit',
   ];
 }
+
+/** One-line description per built-in command (shown in the / dropdown). */
+export const SLASH_HINTS: Record<string, string> = {
+  help: 'list commands and keys',
+  usage: 'session token usage + cost',
+  context: 'estimated context tokens',
+  model: 'switch model (or pick from list)',
+  effort: 'reasoning effort: low | medium | high | max',
+  retry: 're-run the last prompt (new turn)',
+  compact: 'summarize context now',
+  permission: 'override a tool: allow | ask | deny',
+  skills: 'load a skill',
+  sessions: 'pick a session to resume',
+  resume: 'continue a session by id',
+  new: 'start a fresh session',
+  diff: 'show working-tree diff',
+  status: 'git status',
+  commit: 'commit changes',
+  checkpoint: 'snapshot the worktree',
+  rollback: 'restore the last checkpoint',
+  plan: 'plan mode on/off',
+  todos: 'toggle the todo list',
+  tools: 'toggle tools on/off',
+  yolo: 'auto-allow all tools',
+  image: 'attach an image',
+  export: 'export the session as Markdown',
+  exit: 'quit',
+};
 
 /** Commands matching the current input ("/" → all; else prefix filter). */
 export function slashMatches(input: string, extra: string[] = []): string[] {
@@ -472,9 +514,30 @@ export interface Row {
   text: string;
 }
 
-function toolLines(b: Extract<Block, { tag: 'tool' }>): string[] {
-  const head = `[tool-call] ${b.name} ${truncateWidth(b.args.replace(/\s+/g, ' '), 40)}`;
-  if (!b.output) return [head + (b.done ? '' : ' …')];
+/** Collapse a tool-args JSON string to a compact single line. */
+function compactJson(s: string): string {
+  try {
+    return JSON.stringify(JSON.parse(s));
+  } catch {
+    // Partial/streamed args aren't valid JSON yet — just squash whitespace.
+    return s.replace(/\s+/g, ' ');
+  }
+}
+
+function toolLines(b: Extract<Block, { tag: 'tool' }>, width: number): string[] {
+  const args = compactJson(b.args);
+  // Keep the whole call on one line: truncate the args to fit the row width
+  // (with an ellipsis when cut) so wrapText never folds the JSON.
+  const suffix = !b.output && !b.done ? ' …' : '';
+  const prefix = `[tool-call] ${b.name} `;
+  // Reserve one extra column for the ellipsis: U+2026 is East Asian
+  // Ambiguous — string-width counts 1, but CJK terminals may render it 2
+  // wide. Without the slack a head that fills the row exactly would overflow
+  // by one column and push the sidebar out of alignment.
+  const argsW = Math.max(1, width - strWidth(prefix) - strWidth(suffix) - 2);
+  const shown = truncateWidth(args, argsW);
+  const head = prefix + shown + (shown.length < args.length ? '…' : '') + suffix;
+  if (!b.output) return [head];
   if (!b.expanded) {
     const lines = b.output.split('\n');
     const preview = lines.slice(0, TOOL_PREVIEW_LINES);
@@ -503,7 +566,7 @@ export function layoutBlocks(blocks: Block[], width: number): Row[] {
   blocks.forEach((b, blockIdx) => {
     const lines =
       b.tag === 'tool'
-        ? toolLines(b as Extract<Block, { tag: 'tool' }>)
+        ? toolLines(b as Extract<Block, { tag: 'tool' }>, Math.max(1, width))
         : b.tag === 'thinking'
           ? thinkingLines(b as Extract<Block, { tag: 'thinking' }>)
           : [PREFIX[b.tag] + b.text];

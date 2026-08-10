@@ -1,11 +1,20 @@
 import React from 'react';
 import { Box, Text, useAnimation, useCursor } from 'ink';
-import { strWidth, truncateWidth } from './term.js';
+import {
+  strWidth,
+  truncateWidth,
+  splitUrls,
+  wrappedRows,
+  wrappedCursor,
+  wrapWords,
+  INPUT_PREFIX,
+} from './term.js';
 import {
   FLASH_MS,
   inputLineCol,
   fmtSession,
   selectionRange,
+  SLASH_HINTS,
   type Block,
   type Option,
   type PaletteItem,
@@ -26,6 +35,19 @@ const TAG_STYLE: Record<Block['tag'], { color?: string; bold?: boolean; dim?: bo
   sys: { color: 'magenta' },
 };
 
+/** Render text with http(s) URLs as clickable OSC 8 terminal hyperlinks. */
+function renderWithLinks(text: string): React.ReactNode[] {
+  return splitUrls(text).map((p, i) =>
+    p.url ? (
+      <Text key={i} color="cyan" underline>
+        {`\x1b]8;;${p.url}\x1b\\${p.text}\x1b]8;;\x1b\\`}
+      </Text>
+    ) : (
+      p.text
+    ),
+  );
+}
+
 export function TranscriptRow({
   block,
   text,
@@ -43,15 +65,15 @@ export function TranscriptRow({
   if (!sel || sel.end <= sel.start) {
     return (
       <Text color={s.color} bold={s.bold} dimColor={s.dim} wrap="truncate">
-        {text}
+        {renderWithLinks(text)}
       </Text>
     );
   }
   return (
     <Text color={s.color} bold={s.bold} dimColor={s.dim} wrap="truncate">
-      {text.slice(0, sel.start)}
-      <Text inverse>{text.slice(sel.start, sel.end)}</Text>
-      {text.slice(sel.end)}
+      {renderWithLinks(text.slice(0, sel.start))}
+      <Text inverse>{renderWithLinks(text.slice(sel.start, sel.end))}</Text>
+      {renderWithLinks(text.slice(sel.end))}
     </Text>
   );
 }
@@ -63,6 +85,29 @@ function Spinner(): React.JSX.Element {
   const { frame } = useAnimation({ interval: 160 });
   const chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   return <Text color="cyan">{chars[frame % chars.length]!}</Text>;
+}
+
+/** Segments in the compact ctx budget bar rendered in the StatusBar. */
+const CTX_BAR_W = 10;
+
+/**
+ * Compact color-coded context budget gauge, drawn right after the ctx≈ text:
+ * green below 70% of budget, yellow below 90%, red at/over 90% (approaching
+ * or past the compaction budget). ASCII fill (`#`/`-`) like the sidebar bar —
+ * block glyphs are ambiguous-width on some terminals.
+ */
+function ctxBudgetBar(tokens: number, budget: number): React.JSX.Element {
+  const pct = tokens / Math.max(1, budget);
+  const fill = Math.round(Math.min(1, Math.max(0, pct)) * CTX_BAR_W);
+  const color: 'green' | 'yellow' | 'red' = pct < 0.7 ? 'green' : pct < 0.9 ? 'yellow' : 'red';
+  return (
+    <Text color={color}>
+      {' ['}
+      {'#'.repeat(fill)}
+      <Text dimColor>{'-'.repeat(CTX_BAR_W - fill)}</Text>
+      {']'}
+    </Text>
+  );
 }
 
 export function StatusBar({
@@ -88,14 +133,25 @@ export function StatusBar({
   const ses = session
     ? `  · ${fmtSession(session)} ≈${fmtCost(estimateCost(state.model, session))}`
     : '';
-  // Yolo badge is a separate colored element; status text truncates tighter to
-  // leave room for it.
-  const statusText = truncateWidth(state.status + sc + focus + selHint + ctx + ses, 92);
+  // The ctx bar only makes sense when both the current usage and the budget
+  // are known; it's a separate colored element, so the status text truncates
+  // tighter to leave room for it (same trick as the YOLO badge).
+  const bar =
+    state.ctxTokens !== undefined && budget !== undefined
+      ? ctxBudgetBar(state.ctxTokens, budget)
+      : null;
+  const statusText = truncateWidth(
+    state.status + sc + focus + selHint,
+    Math.max(0, 92 - ctx.length - ses.length - (bar ? CTX_BAR_W + 3 : 0)),
+  );
   return (
     <Box>
       {state.running ? <Spinner /> : <Text dimColor>●</Text>}
       {state.yolo ? <Text color="red"> YOLO</Text> : null}
       <Text dimColor> {statusText}</Text>
+      {ctx ? <Text dimColor>{ctx}</Text> : null}
+      {bar}
+      {ses ? <Text dimColor>{ses}</Text> : null}
     </Box>
   );
 }
@@ -134,6 +190,7 @@ function sidebarContent(
     { text: `RingZero · ${cwdName}`, bold: true },
     { text: '', dim: true },
     { text: model, color: 'cyan', bold: true },
+    { text: `effort ${state.effort ?? 'off'}`, dim: true },
     ...(sessionId ? [{ text: `${sessionId.slice(0, 20)}`, dim: true }] : []),
     ...(state.flash && Date.now() - state.flash.at < FLASH_MS
       ? [{ text: `[ok] ${state.flash.text}`, color: 'green' as const, bold: true }]
@@ -333,32 +390,45 @@ export function PromptInput({
   disabled?: boolean;
 }): React.JSX.Element {
   const { setCursorPosition } = useCursor();
-  const prefix = '❯ ';
   const lines = value.split('\n');
   const { line, col } = inputLineCol(value, cursor);
-  // Rendered rows per input line: Ink wraps each at `width` columns, and the
-  // ❯ prefix takes 2 columns of the first line. CJK/fullwidth count as 2 via
-  // strWidth, matching how the terminal actually lays the text out.
-  const rowsOf = (i: number): number =>
-    Math.max(1, Math.ceil((strWidth(lines[i] ?? '') + (i === 0 ? 2 : 0)) / Math.max(1, width)));
-  const totalRows = lines.reduce((n, _, i) => n + rowsOf(i), 0);
-  let rowsBefore = 0;
-  for (let i = 0; i < line; i++) rowsBefore += rowsOf(i);
-  // Display width up to the cursor within the CURRENT line (prefix on line 0).
-  const colWidth = strWidth((line === 0 ? prefix : '') + (lines[line]?.slice(0, col) ?? ''));
-  // Column within the wrapped row the cursor is on; row counted from the top
-  // of the frame (our app is fullscreen, so Ink's cursor y is 1-based rows).
-  const x = colWidth % Math.max(1, width);
-  const y = height - totalRows + rowsBefore + Math.floor(colWidth / Math.max(1, width)) + 1;
+  // Ink word-wraps each rendered line (wrap-ansi, hard breaks) — rows are NOT
+  // uniform full-width, so both the row count and the cursor position must be
+  // read from the same wrap Ink applies, or the cursor lands a few columns
+  // back whenever a line broke early at a word boundary.
+  const lineTexts = lines.map((ln, i) => (i === 0 ? INPUT_PREFIX : '') + ln);
+  const rowsOf = lineTexts.map((t) => wrappedRows(t, width));
+  const totalRows = rowsOf.reduce((n, r) => n + r, 0);
+  const rowsBefore = rowsOf.slice(0, line).reduce((n, r) => n + r, 0);
+  const { row, col: x } = wrappedCursor(
+    lineTexts[line] ?? '',
+    (line === 0 ? INPUT_PREFIX.length : 0) + col,
+    width,
+  );
+  // Row counted from the top of the frame (our app is fullscreen, so Ink's
+  // cursor y is 1-based rows).
+  const y = height - totalRows + rowsBefore + row + 1;
   setCursorPosition({ x, y });
   return (
     <Box flexDirection="column">
-      {lines.map((ln, i) => (
-        <Text key={i} dimColor={disabled}>
-          {i === 0 ? <Text color="green">{prefix}</Text> : null}
-          {ln}
-        </Text>
-      ))}
+      {lines.flatMap((ln, i) => {
+        // Rows are pre-wrapped with our own word-wrap (ambiguous chars count
+        // 2, matching CJK terminals) and rendered with wrap="truncate" so Ink
+        // never re-wraps them with its own width math.
+        const rows = wrapWords((i === 0 ? INPUT_PREFIX : '') + ln, width);
+        return rows.map((row, j) => (
+          <Text key={`${i}-${j}`} dimColor={disabled} wrap="truncate">
+            {i === 0 && j === 0 ? (
+              <>
+                <Text color="green">{INPUT_PREFIX}</Text>
+                {row.slice(INPUT_PREFIX.length)}
+              </>
+            ) : (
+              row
+            )}
+          </Text>
+        ));
+      })}
     </Box>
   );
 }
@@ -417,8 +487,9 @@ export function SelectModal({
             inverse={realIndex === index}
           >
             {realIndex === index ? '▸ ' : '  '}
-            {truncateWidth(o.label, 60)}
-            {o.hint ? <Text dimColor> {o.hint}</Text> : null}
+            {truncateWidth(o.label, o.desc ? 24 : 60)}
+            {o.desc ? <Text color="gray"> — {truncateWidth(o.desc, 34)}</Text> : null}
+            {o.hint ? <Text color="gray"> {o.hint}</Text> : null}
           </Text>
         );
       })}
@@ -432,18 +503,35 @@ export function SelectModal({
 export function SlashSuggest({
   items,
   index,
+  height = 8,
 }: {
   items: string[];
   index: number;
+  /** Window height: the list scrolls around the highlight when it's longer. */
+  height?: number;
 }): React.JSX.Element {
-  const shown = items.slice(0, 8);
+  // Window around the highlighted command (like SelectModal) so long lists
+  // (e.g. a lone "/") scroll with ↑/↓ instead of pinning the highlight at
+  // the edge of a fixed top-8 slice.
+  const start = Math.max(0, Math.min(index - Math.floor(height / 2), items.length - height));
+  const shown = items.slice(start, start + height);
   return (
     <Box flexDirection="column">
-      {shown.map((c, i) => (
-        <Text key={c} color={i === index ? 'cyan' : undefined} inverse={i === index}>
-          {i === index ? '▸ ' : '  '}/<Text dimColor={i !== index}>{c}</Text>
-        </Text>
-      ))}
+      {shown.map((c, i) => {
+        const realIndex = start + i;
+        const hint = SLASH_HINTS[c];
+        const hintW = Math.max(1, 60 - c.length - 3);
+        return (
+          <Text
+            key={c}
+            color={realIndex === index ? 'cyan' : undefined}
+            inverse={realIndex === index}
+          >
+            {realIndex === index ? '▸ ' : '  '}/<Text dimColor={realIndex !== index}>{c}</Text>
+            {hint ? <Text color="gray"> {truncateWidth(hint, hintW)}</Text> : null}
+          </Text>
+        );
+      })}
     </Box>
   );
 }
@@ -494,7 +582,7 @@ export function PaletteModal({
         <Text key={it.label} color={i === index ? 'cyan' : undefined} inverse={i === index}>
           {i === index ? '▸ ' : '  '}
           {it.label}
-          {it.hint ? <Text dimColor> {it.hint}</Text> : null}
+          {it.hint ? <Text color="gray"> {it.hint}</Text> : null}
         </Text>
       ))}
     </Box>

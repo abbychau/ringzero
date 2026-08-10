@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { detectGitRoot, loadConfig } from '../src/config/config.js';
+import { detectGitRoot, loadConfig, WIN_SYSTEM_HINT } from '../src/config/config.js';
 
 test('detectGitRoot finds the repo root from inside the repo', () => {
   const root = detectGitRoot(process.cwd());
@@ -16,6 +16,18 @@ test('detectGitRoot is undefined outside a git repo', () => {
   const dir = mkdtempSync(join(tmpdir(), 'rz-plain-'));
   assert.equal(detectGitRoot(dir), undefined);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('WIN_SYSTEM_HINT tells the agent cmd.exe lacks POSIX tools and what to use', () => {
+  // The agent keeps reaching for grep/tail/ls in the Windows shell; the hint
+  // must name the missing commands and the working alternatives explicitly.
+  assert.ok(WIN_SYSTEM_HINT.includes('cmd.exe'), WIN_SYSTEM_HINT);
+  assert.ok(WIN_SYSTEM_HINT.includes('no grep, tail'), WIN_SYSTEM_HINT);
+  assert.ok(WIN_SYSTEM_HINT.includes('findstr'), WIN_SYSTEM_HINT);
+  assert.ok(WIN_SYSTEM_HINT.includes('list_dir'), WIN_SYSTEM_HINT);
+  assert.ok(WIN_SYSTEM_HINT.includes('backslashes'), WIN_SYSTEM_HINT);
+  // Must stay a single paragraph (the system prompt list is one block per item).
+  assert.ok(!WIN_SYSTEM_HINT.includes('\n'), 'hint should be one line');
 });
 
 test('loadConfig resolves an explicit RINGZERO_WORKSPACE', () => {
@@ -144,5 +156,33 @@ test('YOLO empty string shadows RINGZERO_YOLO (like EFFORT)', () => {
     withEnv('RINGZERO_YOLO', '1', () => {
       assert.equal(loadConfig().env.yolo, undefined);
     }),
+  );
+});
+
+test('RINGZERO_COST_CAP and RINGZERO_TOKEN_CAP map onto config', () => {
+  return withEnv('RINGZERO_COST_CAP', '0.5', () =>
+    withEnv('RINGZERO_TOKEN_CAP', '100000', () => {
+      const c = loadConfig();
+      assert.equal(c.costCap, 0.5);
+      assert.equal(c.tokenCap, 100000);
+    }),
+  );
+});
+
+test('unset or invalid caps mean no cap', () => {
+  return withEnv('RINGZERO_COST_CAP', undefined, () =>
+    withEnv('RINGZERO_TOKEN_CAP', undefined, () => {
+      const c = loadConfig();
+      assert.equal(c.costCap, undefined);
+      assert.equal(c.tokenCap, undefined);
+    }),
+  ).then(() =>
+    withEnv('RINGZERO_COST_CAP', '0', () =>
+      withEnv('RINGZERO_TOKEN_CAP', '-5', () => {
+        const c = loadConfig();
+        assert.equal(c.costCap, undefined);
+        assert.equal(c.tokenCap, undefined);
+      }),
+    ),
   );
 });

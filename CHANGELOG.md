@@ -5,6 +5,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- TUI input keys: `Ctrl+A`/`Ctrl+E` jump to line start/end, `Ctrl+←`/`Ctrl+→`
+  jump by word (CJK-safe) — shell muscle memory in the prompt input.
+- `/retry` command: re-runs the last submitted prompt as a new turn in the
+  same session (TUI + REPL).
+- `/effort [low|medium|high|max]` command: set the reasoning effort, persisted
+  to `config.json`; the sidebar shows the current level.
+- Cost/token caps: `RINGZERO_COST_CAP` (USD) and `RINGZERO_TOKEN_CAP`
+  (cumulative tokens) abort a run with a clear status when hit and warn once
+  at 80% (`cap_warn` event; surfaced in the TUI status line and the REPL).
+- Context budget bar: the StatusBar shows a color-coded gauge (green <70%,
+  yellow <90%, red beyond) next to `ctx≈…`, matching the sidebar bar.
+- Streamable-HTTP transport fix + offline test coverage: `httpTransport.start`
+  now wires the response callback (previously responses were dropped and HTTP
+  requests hung), and `test/mcp-http.test.ts` covers the `{url}` config path
+  end-to-end (JSON + SSE responses, session-id round-trip, error paths) with
+  a local server.
+- Windows shell guidance: the bash tool description and a system-prompt hint
+  tell the agent `cmd.exe` has no POSIX utilities and name the working
+  alternatives (`dir`, `type`, `findstr`, the fs tools).
+
+### Changed
+
+- `/help` renders one command per line with a hint column and `keys:`/`args:`
+  sections; `/help <cmd>` shows just that command's hint.
+- Tool-call heads in the transcript compact pretty-printed JSON args to a
+  single line, truncating with an ellipsis so rows never wrap; partial
+  streamed args are tolerated.
+- `/tools` menu rows show the tool name with its description and an
+  `ON`/`OFF` hint; the selection stays on the toggled row between iterations.
+- The `/` dropdown windows around the highlighted command (long menus scroll)
+  and shows each command's hint; Enter fills the highlighted command.
+- Prompt input rows are pre-wrapped with the same word-wrap Ink applies
+  (ambiguous-width chars count 2), so the cursor lands exactly on the
+  character the user typed.
+- `SelectModal` hints render in gray and options support a secondary
+  description (`desc`).
+
+### Fixed
+
+- MCP streamable-HTTP transport dropped every response: `start()` ignored its
+  callback and `send()` used a module-level placeholder.
+- bash tool description on Windows now states `cmd.exe` lacks `grep`/`tail`/
+  `ls`/`cat` instead of vaguely recommending fs tools.
+
 ## [0.4.2] - 2026-08-08
 
 ### Added

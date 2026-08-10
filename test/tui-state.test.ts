@@ -11,6 +11,7 @@ import {
   inputLineCol,
   inputLines,
   slashMatches,
+  slashCommands,
   historyToBlocks,
   selectionRange,
   selectionText,
@@ -18,6 +19,7 @@ import {
   type Block,
   type Selection,
 } from '../src/tui/state.js';
+import { handleSlashCommand, type CommandDeps } from '../src/tui/commands.js';
 
 test('reducer appends and streams assistant text', () => {
   let s = initial('m');
@@ -154,6 +156,69 @@ test('layoutBlocks wraps and collapses tool preview', () => {
   assert.ok(toolText.includes('+1 lines'));
 });
 
+test('tool-call head compacts pretty-printed JSON args to one line', () => {
+  const blocks: Block[] = [
+    {
+      tag: 'tool',
+      name: 'bash',
+      args: '{\n  "command": "ls",\n  "cwd": "/tmp"\n}',
+      done: true,
+      expanded: false,
+    },
+  ];
+  const rows = layoutBlocks(blocks, 60);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]!.text, '[tool-call] bash {"command":"ls","cwd":"/tmp"}');
+});
+
+test('tool-call head truncates long args with an ellipsis and never wraps', () => {
+  const longArgs = JSON.stringify({
+    command: 'npm run build && npm test',
+    cwd: '/very/long/working/directory/with/many/segments',
+    env: { FOO: 'bar' },
+  });
+  const blocks: Block[] = [
+    { tag: 'tool', name: 'bash', args: longArgs, done: true, expanded: false },
+  ];
+  const width = 40;
+  const rows = layoutBlocks(blocks, width);
+  assert.equal(rows.length, 1, 'head must stay on a single row');
+  const t = rows[0]!.text;
+  assert.ok(t.startsWith('[tool-call] bash {'), `head: ${t}`);
+  assert.ok(t.endsWith('…'), `head should end with an ellipsis: ${t}`);
+  assert.ok(t.length <= width, `head wider than ${width}: ${t}`);
+});
+
+test('tool-call head survives partial streamed args', () => {
+  const rows = layoutBlocks(
+    [{ tag: 'tool', name: 'bash', args: '{"command": "', done: false, expanded: false }],
+    60,
+  );
+  assert.equal(rows.length, 1);
+  assert.ok(rows[0]!.text.startsWith('[tool-call] bash {"command": "'));
+  assert.ok(rows[0]!.text.endsWith(' …')); // running indicator
+});
+
+test('tool-call head with CJK args stays within the row width', () => {
+  // CJK args are double-width; the head must truncate by width (not chars)
+  // and leave room for the ellipsis so the row never overflows — even in
+  // terminals that render U+2026 as 2 columns.
+  const blocks: Block[] = [
+    {
+      tag: 'tool',
+      name: 'bash',
+      args: '{"command": "echo 測試一二三四五六七八九十"}',
+      done: true,
+      expanded: false,
+    },
+  ];
+  const width = 40;
+  const rows = layoutBlocks(blocks, width);
+  assert.equal(rows.length, 1, 'head must stay on a single row');
+  assert.ok(rows[0]!.text.length <= width, `head wider than ${width}: ${rows[0]!.text}`);
+  assert.ok(rows[0]!.text.includes('測試'), `head should show the CJK args: ${rows[0]!.text}`);
+});
+
 test('windowRows clamps scroll and shows bottom by default', () => {
   const rows = Array.from({ length: 10 }, (_, i) => ({ blockIdx: 0, text: `r${i}` }));
   const w = windowRows(rows, 4, 0);
@@ -193,6 +258,12 @@ test('inputLines counts wrapped rows (CJK-aware, prefix on line 0)', () => {
   assert.equal(inputLines('x'.repeat(150), 100), 2);
   assert.equal(inputLines('a\n' + 'y'.repeat(150), 100), 3);
   assert.equal(inputLines('你'.repeat(60), 100), 2); // CJK double-width: 120+2 cols
+});
+
+test('inputLines counts Ink-style word-wrap rows', () => {
+  // Word breaks follow Ink's wrap-ansi: rows fill to the width when possible.
+  assert.equal(inputLines('a b c d e f g h i j k l m', 10), 3);
+  assert.equal(inputLines('aaaa bbbb cccc', 10), 2);
 });
 
 test('historyToBlocks replays session messages as transcript blocks', () => {
@@ -288,9 +359,51 @@ test('slashMatches filters commands by prefix (and a lone slash shows all)', () 
   assert.deepEqual(slashMatches('/p'), ['permission', 'plan']);
   assert.deepEqual(slashMatches('/t'), ['todos', 'tools']);
   assert.ok(slashMatches('/').includes('yolo'));
+  // /retry ships with the built-in command list + a hint
+  assert.ok(slashCommands().includes('retry'));
+  assert.ok(slashMatches('/ret').includes('retry'));
   // plugin extras are merged and deduped against built-ins
   assert.ok(slashMatches('/', ['mcp-list']).includes('mcp-list'));
   assert.deepEqual(slashMatches('/m', ['mcp-list']), ['model', 'mcp-list']);
+});
+
+test('/retry re-submits the last submitted prompt as a new turn', async () => {
+  const submitted: string[] = [];
+  const sys: string[] = [];
+  const history = ['first prompt', 'second prompt'];
+  const deps = {
+    runner: {},
+    pushSys: (t: string) => sys.push(t),
+    dispatch: () => {},
+    openInputModal: async () => null,
+    openSelect: async () => null,
+    askRef: {},
+    getState: () => ({ history }),
+    submit: (t: string) => submitted.push(t),
+    quit: () => {},
+  } as unknown as CommandDeps;
+  await handleSlashCommand('/retry', deps);
+  assert.deepEqual(submitted, ['second prompt']);
+  assert.ok(sys.some((s) => s.startsWith('retrying: second prompt')));
+});
+
+test('/retry with no history says there is nothing to retry', async () => {
+  const submitted: string[] = [];
+  const sys: string[] = [];
+  const deps = {
+    runner: {},
+    pushSys: (t: string) => sys.push(t),
+    dispatch: () => {},
+    openInputModal: async () => null,
+    openSelect: async () => null,
+    askRef: {},
+    getState: () => ({ history: [] }),
+    submit: (t: string) => submitted.push(t),
+    quit: () => {},
+  } as unknown as CommandDeps;
+  await handleSlashCommand('/retry', deps);
+  assert.deepEqual(submitted, []);
+  assert.ok(sys.includes('(nothing to retry)'));
 });
 
 test('reducer resets suggestIdx on input/submit and clamps via suggestIdx action', () => {

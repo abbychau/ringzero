@@ -1,6 +1,7 @@
 /** Zero-dependency terminal primitives: raw mode, ANSI, key parsing, CJK width. */
 import process from 'node:process';
 import stringWidth from 'string-width';
+import { eastAsianWidthType } from 'get-east-asian-width';
 
 export type Key =
   | { type: 'char'; char: string }
@@ -73,17 +74,22 @@ export function style(
 /**
  * Terminal display width of a single character (CJK/fullwidth/emoji = 2,
  * combining/ZWJ = 0). Uses `string-width` — the same library Ink renders with
- * — so our wrapping/truncation always matches what the terminal actually
- * lays out. The hand-rolled wcwidth ranges before this missed several wide
- * blocks (e.g. 🀄 U+1F004, 〿 U+303F), which made rows wrap differently than
- * Ink and broke the layout.
+ * — plus East Asian Ambiguous characters (← … · ± etc.) count as 2, matching
+ * how CJK terminals (e.g. zh-TW Windows consoles) actually render them.
+ * string-width alone counts those as 1, which made rows wider than computed
+ * and pushed the right column out of alignment.
  */
 export function charWidth(ch: string): number {
-  return stringWidth(ch);
+  const w = stringWidth(ch);
+  // Combining marks (width 0) can be classified 'ambiguous' — only widen
+  // characters that already occupy a column.
+  return w + (w > 0 && eastAsianWidthType(ch.codePointAt(0)!) === 'ambiguous' ? 1 : 0);
 }
 
 export function strWidth(s: string): number {
-  return stringWidth(s);
+  let n = 0;
+  for (const ch of s) n += charWidth(ch);
+  return n;
 }
 
 /** Wrap text to a display width, respecting CJK double-width chars. */
@@ -97,8 +103,26 @@ export function wrapText(s: string, width: number): string[] {
     }
     let cur = '';
     let w = 0;
+    let i = 0;
+    // for..of iterates by code point (raw[i] would split surrogate pairs,
+    // making stringWidth return 0 for the halves and never wrapping).
     for (const ch of raw) {
-      const cw = stringWidth(ch);
+      // Don't split a URL across lines: when a URL starts here and doesn't
+      // fit on the current line, move the whole URL to the next line (unless
+      // it's wider than a full line, then it degrades to char wrapping).
+      if (ch === 'h' && w > 0) {
+        const rest = raw.slice(i);
+        if (/^https?:\/\//.test(rest)) {
+          const urlEnd = rest.search(/[\s<>"']/);
+          const urlLen = urlEnd === -1 ? rest.length : urlEnd;
+          if (w + strWidth(rest.slice(0, urlLen)) > width) {
+            out.push(cur);
+            cur = '';
+            w = 0;
+          }
+        }
+      }
+      const cw = charWidth(ch);
       if (w + cw > width && cur !== '') {
         out.push(cur);
         cur = '';
@@ -106,17 +130,128 @@ export function wrapText(s: string, width: number): string[] {
       }
       cur += ch;
       w += cw;
+      i += ch.length;
     }
     out.push(cur);
   }
   return out;
 }
 
+/**
+ * Split text into plain parts and URLs. Used to render terminal hyperlinks
+ * (OSC 8) without touching the plain text (selection/copy keep the raw URL).
+ * Trailing sentence punctuation (.,;:!?…) is kept out of the link.
+ */
+export function splitUrls(text: string): { url?: string; text: string }[] {
+  const out: { url?: string; text: string }[] = [];
+  const re = /https?:\/\/[^\s<>"']+/g;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    const idx = m.index!;
+    const url = m[0]!.replace(/[.,;:!?\]}\)>"']+$/, '');
+    if (!url) continue;
+    if (idx > last) out.push({ text: text.slice(last, idx) });
+    out.push({ url, text: url });
+    // Skip only the trimmed URL; trimmed punctuation stays in the plain text.
+    last = idx + url.length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out;
+}
+
+/** The prompt prefix rendered before line 0 of the input. */
+export const INPUT_PREFIX = '❯ ';
+
+/**
+ * Word-wrap `text` to `width` columns, breaking at word boundaries (hard
+ * break for words wider than a row). Whitespace stays attached to the word
+ * it follows (like wrap-ansi's trim:false), so concatenating the rows yields
+ * the original text. Rows never exceed `width` — measured with charWidth,
+ * which treats East Asian Ambiguous chars as 2 columns like CJK terminals.
+ */
+export function wrapWords(text: string, width: number): string[] {
+  const w = Math.max(1, width);
+  const words = text.match(/\s*\S+\s*/g);
+  if (!words || words.length === 0) return [text];
+  const rows: string[] = [];
+  let cur = '';
+  let curW = 0;
+  for (const word of words) {
+    const ww = strWidth(word);
+    if (curW + ww <= w) {
+      cur += word;
+      curW += ww;
+      continue;
+    }
+    if (ww > w) {
+      // Word wider than a row: fill the current row first, then hard-break.
+      let piece = cur;
+      let pieceW = curW;
+      cur = '';
+      curW = 0;
+      for (const ch of word) {
+        const cw = charWidth(ch);
+        if (pieceW + cw > w && piece !== '') {
+          rows.push(piece);
+          piece = '';
+          pieceW = 0;
+        }
+        piece += ch;
+        pieceW += cw;
+      }
+      if (piece !== '') rows.push(piece);
+      continue;
+    }
+    if (cur !== '') {
+      rows.push(cur);
+      cur = '';
+      curW = 0;
+    }
+    cur = word;
+    curW = ww;
+  }
+  if (cur !== '') rows.push(cur);
+  return rows;
+}
+
+/**
+ * Terminal rows `text` occupies when word-wrapped the way the input renders
+ * it (see `wrapWords`). The input cursor and the layout reservation must both
+ * agree with the rendered rows, so they use this instead of assuming uniform
+ * full-width rows.
+ */
+export function wrappedRows(text: string, width: number): number {
+  return wrapWords(text, width).length;
+}
+
+/**
+ * Cursor position of char index `pos` within `text` after word-wrapping (see
+ * `wrapWords`): 0-based row in the wrapped output and display column
+ * (CJK/ambiguous-aware). Rows are NOT uniform width (word breaks happen
+ * early), so the column cannot be derived with `% width` — it must be read
+ * from the actual wrapped layout.
+ */
+export function wrappedCursor(
+  text: string,
+  pos: number,
+  width: number,
+): { row: number; col: number } {
+  const lines = wrapWords(text, width);
+  let remaining = Math.max(0, Math.min(pos, text.length));
+  for (let r = 0; r < lines.length; r++) {
+    const ln = lines[r]!;
+    if (remaining <= ln.length) return { row: r, col: strWidth(ln.slice(0, remaining)) };
+    remaining -= ln.length + 1; // +1 for the wrap-inserted newline
+  }
+  const last = lines[lines.length - 1]!;
+  return { row: Math.max(0, lines.length - 1), col: strWidth(last) };
+}
+
 export function truncateWidth(s: string, width: number): string {
   let out = '';
   let w = 0;
   for (const ch of s) {
-    const cw = stringWidth(ch);
+    const cw = charWidth(ch);
     if (w + cw > width) break;
     out += ch;
     w += cw;
@@ -132,7 +267,7 @@ export function colToCharIndex(text: string, col: number): number {
   if (col <= 0) return 0;
   let w = 0;
   for (let i = 0; i < text.length; i++) {
-    const cw = stringWidth(text[i]!);
+    const cw = charWidth(text[i]!);
     if (w + cw > col) return i;
     w += cw;
   }

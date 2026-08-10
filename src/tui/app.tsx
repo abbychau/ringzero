@@ -116,6 +116,14 @@ function wordStart(s: string, cursor: number): number {
   return i;
 }
 
+/** Cursor position after the word containing `cursor` (Ctrl+→). */
+function wordEnd(s: string, cursor: number): number {
+  let i = cursor;
+  while (i < s.length && s[i] !== ' ' && s[i] !== '\n') i++;
+  while (i < s.length && (s[i] === ' ' || s[i] === '\n')) i++;
+  return i;
+}
+
 export function App({
   runner,
   askRef,
@@ -128,7 +136,7 @@ export function App({
 }: AppProps): React.JSX.Element {
   const [state, dispatch] = useReducer(
     reducer,
-    initial(initialModel, runner.isPlanMode(), runner.yolo),
+    initial(initialModel, runner.isPlanMode(), runner.yolo, runner.effort),
   );
   const { rows: termRows, columns } = useWindowSize();
   // Narrow terminals (< SIDEBAR_W + gap + SIDEBAR_MIN_MAIN cols) fall back to
@@ -198,8 +206,6 @@ export function App({
         ? 0
         : 1; // full-width status bar
   const transH = Math.max(1, termRows - headerH - todosH - bottomH - inputLinesN);
-  // Items actually shown: on tiny terminals the list is capped to fit.
-  const shownSlash = slashItems.slice(0, slashH);
   const allRows = useMemo(
     () => layoutBlocks(state.blocks, Math.max(1, mainW)),
     [state.blocks, mainW],
@@ -275,7 +281,7 @@ export function App({
       agentRef.current = agent;
       let usage: Usage | undefined;
       let status = 'idle';
-      let finishReason: 'done' | 'max_steps' = 'done';
+      let finishReason: 'done' | 'max_steps' | 'cap' = 'done';
       let hitSteps = 0;
       try {
         for await (const ev of agent.run(prompt, { images })) {
@@ -306,10 +312,15 @@ export function App({
           } else if (ev.type === 'permission' && !ev.allowed)
             pushSys(`permission denied: ${ev.name}`);
           else if (ev.type === 'compacting') pushSys('compacting context…');
+          else if (ev.type === 'cap_warn') pushSys(ev.message);
           else if (ev.type === 'finish') {
             usage = ev.usage;
             finishReason = ev.reason;
             hitSteps = ev.steps;
+            // Cap hit: surface the abort status in the status line (and don't
+            // auto-continue — the finishReason check below only continues on
+            // max_steps).
+            if (ev.reason === 'cap' && ev.status) status = ev.status;
           }
         }
         if (abort.signal.aborted) status = 'aborted';
@@ -378,11 +389,11 @@ export function App({
   }, [promptUserRef, openInputModal]);
 
   const openSelect = useCallback(
-    (title: string, options: Option[]): Promise<string | null> =>
+    (title: string, options: Option[], initialIndex = 0): Promise<string | null> =>
       new Promise((resolve) =>
         dispatch({
           type: 'setModal',
-          modal: { kind: 'select', title, options, index: 0, resolve },
+          modal: { kind: 'select', title, options, index: initialIndex, resolve },
         }),
       ),
     [],
@@ -397,6 +408,7 @@ export function App({
       openSelect,
       askRef,
       getState: () => stateRef.current,
+      submit: (text) => submitRef.current(text),
       quit,
     }),
     [pushSys, openInputModal, openSelect, quit],
@@ -433,6 +445,10 @@ export function App({
     },
     [runCommand, runTurn, pushSys],
   );
+  // /retry re-submits the last prompt through cmdDeps; a ref keeps the
+  // submit ↔ cmdDeps cycle acyclic (cmdDeps feeds runCommand which submit calls).
+  const submitRef = useRef<(text: string) => void>(() => {});
+  submitRef.current = submit;
 
   const paletteItems = useCallback(
     (): PaletteItem[] => [
@@ -691,6 +707,14 @@ export function App({
     if (key.return) {
       if (key.shift) {
         insertAtCursor('\n'); // Shift+Enter → newline (kitty-capable terminals)
+      } else if (slashItems.length) {
+        // With the / menu open, Enter picks the highlighted command into the
+        // input (like Tab) instead of submitting — except when the input
+        // already IS that command, then Enter runs it as usual.
+        const cmd = slashItems[Math.min(s.suggestIdx, slashItems.length - 1)]!;
+        const full = '/' + cmd;
+        if (s.input === full) submit(s.input);
+        else setInput(full, full.length);
       } else {
         submit(s.input);
       }
@@ -746,6 +770,16 @@ export function App({
       setInput(s.input.slice(0, w), w);
       return;
     }
+    if (key.ctrl && c === 'a') {
+      // Ctrl+A → home (shell muscle memory)
+      setInput(s.input, 0);
+      return;
+    }
+    if (key.ctrl && c === 'e') {
+      // Ctrl+E → end
+      setInput(s.input, s.input.length);
+      return;
+    }
     if (key.backspace) {
       if (s.cursor > 0)
         setInput(s.input.slice(0, s.cursor - 1) + s.input.slice(s.cursor), s.cursor - 1);
@@ -756,7 +790,9 @@ export function App({
         setInput(s.input.slice(0, s.cursor) + s.input.slice(s.cursor + 1), s.cursor);
       return;
     }
-    if (key.leftArrow) setInput(s.input, Math.max(0, s.cursor - 1));
+    if (key.ctrl && key.leftArrow) setInput(s.input, wordStart(s.input, s.cursor));
+    else if (key.ctrl && key.rightArrow) setInput(s.input, wordEnd(s.input, s.cursor));
+    else if (key.leftArrow) setInput(s.input, Math.max(0, s.cursor - 1));
     else if (key.rightArrow) setInput(s.input, Math.min(s.input.length, s.cursor + 1));
     else if (key.home) setInput(s.input, 0);
     else if (key.end) setInput(s.input, s.input.length);
@@ -1045,10 +1081,7 @@ export function App({
             <Text dimColor> Esc cancels · Enter confirms</Text>
           </Box>
         ) : slashH > 0 ? (
-          <SlashSuggest
-            items={shownSlash}
-            index={Math.min(state.suggestIdx, shownSlash.length - 1)}
-          />
+          <SlashSuggest items={slashItems} index={state.suggestIdx} height={slashH} />
         ) : !showSidebar ? (
           <StatusBar
             state={state}

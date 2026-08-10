@@ -15,6 +15,7 @@ import { PLAN_APPROVED } from './types.js';
 import { newId } from './id.js';
 import { truncateOutput } from './truncate.js';
 import { compactHistory, estimateContextTokens } from './context.js';
+import { estimateCost, fmtCost } from './cost.js';
 import { makeRedactor } from './redact.js';
 import { PermissionGate } from '../permission/gate.js';
 
@@ -79,7 +80,16 @@ export type AgentEvent =
   | { type: 'permission'; name: string; allowed: boolean }
   | { type: 'compacting' }
   | { type: 'injected'; text: string }
-  | { type: 'finish'; usage?: TokenUsage; steps: number; reason: 'done' | 'max_steps' };
+  /** One-shot warning when a run crosses 80% of a cost/token cap. */
+  | { type: 'cap_warn'; message: string }
+  | {
+      type: 'finish';
+      usage?: TokenUsage;
+      steps: number;
+      reason: 'done' | 'max_steps' | 'cap';
+      /** Human-readable abort status when reason is 'cap'. */
+      status?: string;
+    };
 
 export interface AgentOptions {
   provider: Provider;
@@ -99,6 +109,12 @@ export interface AgentOptions {
   maxSteps?: number;
   maxToolOutputChars?: number;
   compact?: boolean;
+  /** Model name used for cost estimation (defaults to the provider id). */
+  model?: string;
+  /** Hard USD cost cap for this run (RINGZERO_COST_CAP); aborts at the cap, warns at 80%. */
+  costCap?: number;
+  /** Hard cumulative-token cap for this run (RINGZERO_TOKEN_CAP); aborts at the cap, warns at 80%. */
+  tokenCap?: number;
   onEvent?: (e: AgentEvent) => void;
   /** Map an external abort signal into the loop. */
   signal?: AbortSignal;
@@ -288,7 +304,12 @@ export class Agent {
     const stepCap = this.opts.maxSteps < 0 ? Number.POSITIVE_INFINITY : this.opts.maxSteps;
     // A natural loop exit (steps >= stepCap) means the cap was hit; only the
     // calls.length === 0 break means the model finished on its own.
-    let reason: 'done' | 'max_steps' = 'max_steps';
+    let reason: 'done' | 'max_steps' | 'cap' = 'max_steps';
+    /** Abort status text for a cap hit (shown by the TUI/REPL). */
+    let capStatus: string | undefined;
+    /** 80% warnings fire once per run (per cap that is set). */
+    let costWarned = false;
+    let tokenWarned = false;
 
     while (steps < stepCap) {
       // Mid-run injection: process queued user messages before the next model call.
@@ -394,6 +415,52 @@ export class Agent {
         }
       }
       addUsage(turnUsage);
+
+      // Cost/token caps (P6.1): checked after each turn against CUMULATIVE
+      // usage for this run. A cap hit aborts the loop with a clear status; the
+      // 80% warning fires once (per cap) so the UI can nudge the user early.
+      if (usage) {
+        const model = this.opts.model ?? this.provider.id;
+        const totalTokens =
+          usage.input + usage.output + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+        const cost = estimateCost(model, usage);
+        const fmtTokens = (n: number): string =>
+          n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+        // fmtCost rounds sub-cent amounts to $0.0000 — useless in a cap status
+        // (e.g. a $0.01 cap on a cheap model), so keep full precision there.
+        const fmtAmt = (n: number): string =>
+          n > 0 && n < 0.01
+            ? '\u0024' + n.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
+            : fmtCost(n);
+        if (this.opts.tokenCap !== undefined) {
+          if (totalTokens >= this.opts.tokenCap) {
+            reason = 'cap';
+            capStatus = `token cap exceeded: ${fmtTokens(totalTokens)} / ${fmtTokens(this.opts.tokenCap)}`;
+            break;
+          }
+          if (!tokenWarned && totalTokens >= this.opts.tokenCap * 0.8) {
+            tokenWarned = true;
+            yield emit({
+              type: 'cap_warn',
+              message: `token cap: ${fmtTokens(totalTokens)} / ${fmtTokens(this.opts.tokenCap)} (80%)`,
+            });
+          }
+        }
+        if (this.opts.costCap !== undefined) {
+          if (cost >= this.opts.costCap) {
+            reason = 'cap';
+            capStatus = `cost cap exceeded: ${fmtAmt(cost)} / ${fmtAmt(this.opts.costCap)}`;
+            break;
+          }
+          if (!costWarned && cost >= this.opts.costCap * 0.8) {
+            costWarned = true;
+            yield emit({
+              type: 'cap_warn',
+              message: `cost cap: ${fmtAmt(cost)} / ${fmtAmt(this.opts.costCap)} (80%)`,
+            });
+          }
+        }
+      }
 
       push({
         id: newId('msg'),
@@ -625,7 +692,13 @@ export class Agent {
       steps++;
     }
 
-    yield emit({ type: 'finish', usage, steps, reason });
+    yield emit({
+      type: 'finish',
+      usage,
+      steps,
+      reason,
+      ...(capStatus !== undefined ? { status: capStatus } : {}),
+    });
   }
 
   private orderedToolDefs(): ToolDefinition[] {

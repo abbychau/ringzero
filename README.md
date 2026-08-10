@@ -71,6 +71,9 @@ disclosure (skills), and ephemeral sub-agents.
   with cache hit rate and an estimated cost from a built-in zero-dep price
   table (right sidebar + StatusBar, `/usage`, per-turn status); tune
   `src/kernel/cost.ts`.
+- **Cost/token caps** — `RINGZERO_COST_CAP` (USD) and `RINGZERO_TOKEN_CAP`
+  abort a run with a clear status when hit (checked per turn against
+  cumulative usage) and warn once at 80%.
 - **Symbol index + `related_files`** — zero-dep ctags-style index
   (`src/tools/indexer.ts`, cached with mtime invalidation); `related_files`
   finds importers and files defining the same symbols before you edit.
@@ -274,7 +277,7 @@ return to full width.
 `Enter` submit · `↑/↓` input history · `PgUp/PgDn` or **mouse wheel** scroll ·
 `Ctrl+P/L` model dialog / cycle favorites (`RINGZERO_MODELS`) · `Ctrl+K` command palette ·
 `Ctrl+O` or **mouse click** expand/collapse tool output · `Ctrl+T` toggle the todo list ·
-`Ctrl+A/E` line start/end ·
+`Ctrl+A/E` line start/end · `Ctrl+←/→` jump by word ·
 `Ctrl+U` clear line · `Ctrl+W` delete word · `Ctrl+C` abort run / exit.
 **Drag with the mouse to select text** (or `Shift+↑/↓`, `Shift+PgUp/PgDn` after
 clicking the transcript) and press `Ctrl+C` or `Ctrl+Y` to copy the selection
@@ -289,7 +292,7 @@ Paste (incl. CJK) is bracketed-paste safe; IME composition works.
 
 ### Slash commands (REPL & TUI)
 
-`/help  /usage  /model [id]  /compact  /copy [n|all]  /permission <tool> <allow|ask|deny>  /yolo [on|off]  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
+`/help  /usage  /context  /model [id]  /effort [level]  /retry  /compact  /copy [n|all]  /permission <tool> <allow|ask|deny>  /yolo [on|off]  /skills [name]  /sessions  /resume <id>  /diff  /status  /commit <msg>  /checkpoint  /rollback  /plan [on|off]  /todos  /tools  /image <path>  /export [path]  /new  /exit`
 
 `/image <path>` attaches an image to your next message (shown as `[img]` in the
 sidebar); `/image clear` removes it. `/export [path]` writes the current session
@@ -298,6 +301,11 @@ as a Markdown transcript (default: `transcript-<id>.md` in the cwd).
 transcript) to the OS clipboard — zero-dep: `clip` / `pbcopy` / `xclip` /
 `wl-copy` / `xsel` — handy when terminal selection is unavailable (mouse mode +
 alternate screen).
+
+`/effort [low|medium|high|max]` sets the reasoning effort (persisted to
+`config.json`, applied to the next run); with no argument it opens a picker
+and always reports the current value. `/retry` re-runs the last submitted
+prompt as a new turn in the same session.
 
 `/tools` opens a toggle menu (TUI) — Enter flips a tool on/off, Esc closes — or
 in the REPL lists every tool (`[on]`/`[off]`), toggles one by name, and `reset`
@@ -416,6 +424,8 @@ echo '{"jsonrpc":"2.0","id":2,"method":"prompt","params":{"text":"列出 cwd"}}'
 | `RINGZERO_PRESERVE_RECENT`              | 8000              | tail tokens kept verbatim on compaction                                                                                                                           |
 | `MAX_STEPS`                             | 24                | agent loop step cap (`-1` = unlimited)                                                                                                                            |
 | `RINGZERO_MAX_STEPS`                    | 24                | long alias for `MAX_STEPS`                                                                                                                                        |
+| `RINGZERO_COST_CAP`                     | —                 | hard per-run cost cap in USD (fractional allowed, e.g. `0.5`); the run aborts at the cap and warns at 80%                                                         |
+| `RINGZERO_TOKEN_CAP`                    | —                 | hard per-run cumulative-token cap (input + output + cache); aborts at the cap, warns at 80%                                                                       |
 | `RINGZERO_MODELS`                       | —                 | comma-separated favorite models for Ctrl+L cycling                                                                                                                |
 | `RINGZERO_RETRIES`                      | 2                 | transient-failure retries (429/5xx/network)                                                                                                                       |
 | `RINGZERO_HOME`                         | `~/.ringzero`     | data dir (skills, plugins)                                                                                                                                        |

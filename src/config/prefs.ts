@@ -2,12 +2,16 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { PermissionRule } from '../permission/gate.js';
+import type { EffortLevel } from '../providers/effort.js';
+import { effortLevel } from '../providers/effort.js';
 
 export interface Prefs {
   disabledTools: Set<string>;
   permissionOverrides: Record<string, PermissionRule>;
   /** Yolo mode (auto-allow all tools), toggled via /yolo. */
   yolo: boolean;
+  /** Reasoning effort, set via /effort (low/medium/high/max). */
+  effort?: EffortLevel;
 }
 
 export interface PrefsPaths {
@@ -23,6 +27,7 @@ interface RawPrefs {
   disabledTools?: unknown;
   permissionOverrides?: unknown;
   yolo?: unknown;
+  effort?: unknown;
 }
 
 /**
@@ -34,8 +39,9 @@ interface RawPrefs {
 export function loadPrefs(paths: PrefsPaths): Prefs {
   const disabledTools = new Set<string>();
   const permissionOverrides: Record<string, PermissionRule> = {};
-  // Project file wins for yolo (read global first, then project overwrites).
+  // Project file wins for yolo/effort (read global first, then project overwrites).
   let yolo = false;
+  let effort: EffortLevel | undefined;
   for (const p of [paths.global, paths.project]) {
     const data = readPrefsFile(p);
     if (!data) continue;
@@ -54,8 +60,12 @@ export function loadPrefs(paths: PrefsPaths): Prefs {
       }
     }
     if (typeof data.yolo === 'boolean') yolo = data.yolo;
+    if (typeof data.effort === 'string') {
+      const e = effortLevel(data.effort);
+      if (e) effort = e;
+    }
   }
-  return { disabledTools, permissionOverrides, yolo };
+  return { disabledTools, permissionOverrides, yolo, effort };
 }
 
 function readPrefsFile(path: string): RawPrefs | null {
@@ -77,6 +87,7 @@ export function savePrefs(paths: PrefsPaths, prefs: Prefs): void {
         disabledTools: [...prefs.disabledTools].sort(),
         permissionOverrides: prefs.permissionOverrides,
         yolo: prefs.yolo,
+        ...(prefs.effort !== undefined ? { effort: prefs.effort } : {}),
       },
       null,
       2,

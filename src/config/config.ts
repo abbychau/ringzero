@@ -19,6 +19,10 @@ export interface AppConfig {
   contextBudget: number;
   preserveRecentTokens: number;
   maxSteps: number;
+  /** Hard USD cost cap per run (RINGZERO_COST_CAP); unset = no cap. */
+  costCap?: number;
+  /** Hard cumulative-token cap per run (RINGZERO_TOKEN_CAP); unset = no cap. */
+  tokenCap?: number;
   systemPrompt: string[];
   favoriteModels: string[];
   permissions: Record<string, PermissionRule>;
@@ -42,6 +46,20 @@ Rules:
 - Keep responses concise and in the user's language.
 - Answer simple conversational questions directly; use tools when the request
   involves inspecting, modifying, or running anything in the workspace.`;
+
+/**
+ * Appended to the system prompt on Windows: the bash tool runs cmd.exe, which
+ * has none of the POSIX utilities (grep/tail/ls/cat/…) models reach for by
+ * default. State the constraint and the alternatives explicitly, or the agent
+ * keeps burning turns on "'grep' is not recognized".
+ */
+export const WIN_SYSTEM_HINT =
+  'Environment: Windows. The bash tool runs cmd.exe — it has no grep, tail, head, ' +
+  'ls, cat, sed, awk, diff, rm, mv, cp, or touch. For files use the dedicated ' +
+  'cross-platform tools (grep, glob, list_dir, tree, read_file, edit_file, ' +
+  'write_file). For shell-only work use cmd/PowerShell natives: dir, type, ' +
+  'findstr /s /i "pattern" *, where, powershell -c "Get-Content file". ' +
+  'Paths use backslashes, e.g. C:\\Users\\name\\project.';
 
 export function num(envVar: string | undefined, fallback: number): number {
   const v = Number(envVar);
@@ -106,6 +124,9 @@ export function loadConfig(envFile?: string): AppConfig {
 
   const systemPrompt: string[] = [
     DEFAULT_SYSTEM,
+    // Windows: bash runs cmd.exe — POSIX utilities don't exist. Say so
+    // explicitly or the agent keeps trying grep/tail/ls in the shell.
+    ...(process.platform === 'win32' ? [WIN_SYSTEM_HINT] : []),
     // Date injection (separate block so Anthropic keeps the static rules cached
     // even as the date rolls; the model uses it for commit messages/date math).
     `Today: ${new Date().toISOString().slice(0, 10)} (UTC). Use this for commit messages, timestamps, and date math.`,
@@ -135,6 +156,10 @@ export function loadConfig(envFile?: string): AppConfig {
     contextBudget: num(process.env.CONTEXT_BUDGET ?? process.env.RINGZERO_CONTEXT_BUDGET, 32_000),
     preserveRecentTokens: num(process.env.RINGZERO_PRESERVE_RECENT, 8_000),
     maxSteps: maxStepsEnv === '-1' ? -1 : num(maxStepsEnv, 24),
+    // P6.1 caps: RINGZERO_COST_CAP (USD, may be fractional) and
+    // RINGZERO_TOKEN_CAP (cumulative tokens) — 0/unset/negative = no cap.
+    costCap: num(process.env.RINGZERO_COST_CAP, 0) || undefined,
+    tokenCap: num(process.env.RINGZERO_TOKEN_CAP, 0) || undefined,
     systemPrompt,
     favoriteModels: favoriteModels.length ? favoriteModels : [env.model],
     verifyCommand: process.env.RINGZERO_VERIFY || undefined,

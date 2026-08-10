@@ -45,9 +45,10 @@ export function stdioTransport(command: string, args: string[], cwd: string): Tr
 /** streamable HTTP transport (MCP spec 2025-06-18): POST + JSON or SSE response. */
 export function httpTransport(url: string, headers: Record<string, string> = {}): Transport {
   let sessionId: string | undefined;
+  let onMsg: (raw: string) => void = () => {};
   return {
-    async start() {
-      /* session is established lazily on the first request */
+    async start(onMessage) {
+      onMsg = onMessage;
     },
     async send(raw) {
       const h: Record<string, string> = {
@@ -69,18 +70,14 @@ export function httpTransport(url: string, headers: Record<string, string> = {})
       const ct = res.headers.get('content-type') ?? '';
       if (ct.includes('text/event-stream')) {
         for await (const ev of consumeSSE(res.body)) {
-          if (ev.data) onMessage(ev.data);
+          if (ev.data) onMsg(ev.data);
         }
       } else {
-        onMessage(await res.text());
+        onMsg(await res.text());
       }
     },
     async close() {
       /* no persistent connection to close */
     },
   };
-}
-
-function onMessage(_raw: string): void {
-  /* placeholder; replaced by start() */
 }

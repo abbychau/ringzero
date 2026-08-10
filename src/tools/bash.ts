@@ -104,7 +104,7 @@ export function bashTool(): Tool {
   const shellNote = hasBunShell()
     ? ' Shell: POSIX (bun shell) — ls, pwd, grep, tail and pipes work on every platform.'
     : isWin
-      ? ' Shell: cmd.exe (Windows). Prefer the dedicated fs tools (list_dir, read_file, grep, glob) over shell commands.'
+      ? ' Shell: cmd.exe (Windows) — no grep/tail/ls/cat. Use the fs tools (list_dir, read_file, grep, glob), or cmd/PowerShell natives: dir, type, findstr, where.'
       : ' Shell: /bin/sh (POSIX).';
   return {
     definition: {

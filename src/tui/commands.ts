@@ -3,6 +3,8 @@ import type { Runner } from '../cli/runner.js';
 import {
   fmtSession,
   fmtUsage,
+  SLASH_HINTS,
+  slashCommands,
   type Action,
   type AskResponse,
   type Option,
@@ -19,13 +21,29 @@ export interface CommandDeps {
   pushSys: (text: string) => void;
   dispatch: Dispatch<Action>;
   openInputModal: (prompt: string) => Promise<string | null>;
-  openSelect: (title: string, options: Option[]) => Promise<string | null>;
+  openSelect: (title: string, options: Option[], initialIndex?: number) => Promise<string | null>;
   askRef: { current?: (p: string) => Promise<AskResponse> };
   getState: () => State;
+  /** Submit a prompt as a normal user turn (used by /retry). */
+  submit: (text: string) => void;
   quit: () => void;
 }
 
 const COPY_UNAVAILABLE = '(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)';
+
+/** Arg syntax + key bindings shown below the command list in /help. */
+const HELP_ARGS = [
+  'args:',
+  '  /model [id] · /copy [n|all] · /permission <tool> <allow|ask|deny>',
+  '  /commit <msg> · /resume <id> · /plan [on|off]',
+];
+const HELP_KEYS = [
+  'keys:',
+  '  Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos',
+  '  Tab/Enter pick / command · Ctrl+J / Shift+Enter newline · ↑/↓ navigate menus',
+  '  Ctrl+U clear · Ctrl+W delete word · Ctrl+L cycle model · Ctrl+C copy/abort/exit',
+  '  drag to select · Ctrl+Y copy selection',
+];
 
 export type CopyPick =
   { ok: true; text: string; count: number } | { ok: false; reason: 'none' | 'bad-arg' };
@@ -53,11 +71,31 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
   const r = deps.runner;
   const pushSys = deps.pushSys;
   switch (cmd) {
-    case 'help':
-      pushSys(
-        'commands: /help /usage /context /model [id] /compact /copy [n|all] /permission <tool> <allow|ask|deny> /yolo [on|off] /skills [name] /sessions /resume <id> /diff /status /commit <msg> /checkpoint /rollback /plan [on|off] /todos /tools /new /exit  · keys: Ctrl+P model · Ctrl+K palette · Ctrl+R search · Ctrl+O expand · Ctrl+T todos · Ctrl+J/Shift+Enter newline · drag to select · Ctrl+C/Y copy selection',
-      );
+    case 'help': {
+      // /help <cmd> shows just that command's hint.
+      const q = rest[0]?.replace(/^\//, '');
+      if (q) {
+        const hint = SLASH_HINTS[q];
+        pushSys(hint ? `/${q} — ${hint}` : `(unknown command: /${q})`);
+        break;
+      }
+      // Full listing: one command per line with its hint, names padded into
+      // a column; plugin commands appended with a marker.
+      const cmds = slashCommands();
+      const w = Math.max(...cmds.map((c) => c.length));
+      const plugins = r.listPluginCommands();
+      const lines = [
+        'commands:',
+        ...cmds.map((c) => `  /${c.padEnd(w)}  ${SLASH_HINTS[c] ?? ''}`),
+        ...(plugins.length ? plugins.map((c) => `  /${c.padEnd(w)}  (plugin)`) : []),
+        '',
+        ...HELP_ARGS,
+        '',
+        ...HELP_KEYS,
+      ];
+      pushSys(lines.join('\n'));
       break;
+    }
     case 'usage': {
       const s = deps.getState();
       if (s.totalUsage) {
@@ -84,6 +122,47 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
           deps.dispatch({ type: 'setModel', model: v.trim() });
           pushSys(`model → ${v.trim()}`);
         }
+      }
+      break;
+    }
+    case 'retry': {
+      // Re-run the last submitted prompt as a new turn (same session). The
+      // reducer keeps every submitted prompt in state.history.
+      const h = deps.getState().history;
+      const last = h[h.length - 1];
+      if (!last) {
+        pushSys('(nothing to retry)');
+        break;
+      }
+      pushSys(`retrying: ${last.slice(0, 60)}${last.length > 60 ? '…' : ''}`);
+      deps.submit(last);
+      break;
+    }
+    case 'effort': {
+      const levels = ['low', 'medium', 'high', 'max'] as const;
+      const current = r.effort ?? 'off';
+      if (rest[0] && (levels as readonly string[]).includes(rest[0])) {
+        const level = rest[0] as (typeof levels)[number];
+        r.setEffort(level);
+        deps.dispatch({ type: 'setEffort', effort: level });
+        pushSys(`effort → ${level} (persisted)`);
+      } else if (rest[0]) {
+        pushSys(`effort: unknown level "${rest[0]}" (low | medium | high | max)`);
+      } else {
+        const v = await deps.openSelect('effort (low | medium | high | max)', [
+          { label: 'low', value: 'low' },
+          { label: 'medium', value: 'medium' },
+          { label: 'high', value: 'high' },
+          { label: 'max', value: 'max' },
+        ]);
+        if (v) {
+          r.setEffort(v as (typeof levels)[number]);
+          deps.dispatch({ type: 'setEffort', effort: v as (typeof levels)[number] });
+          pushSys(`effort → ${v} (persisted)`);
+        }
+      }
+      if (!rest[0] || (levels as readonly string[]).includes(rest[0])) {
+        pushSys(`current effort: ${current}`);
       }
       break;
     }
@@ -249,22 +328,29 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
     }
     case 'tools': {
       // Toggle loop: re-fetch the roster each iteration so the menu reflects
-      // changes immediately; Esc closes. Choices persist to config.json.
+      // changes immediately; Esc closes. Choices persist to config.json. The
+      // selection stays on the toggled row between iterations (the roster
+      // order is stable: listTools includes disabled tools).
+      let index = 0;
       while (true) {
         const tools = r.listTools();
         const v = await deps.openSelect(
           'Tools — Enter toggles, Esc closes',
           tools.map((t) => ({
-            label: `${t.name} — ${t.description}`,
+            label: t.name,
+            desc: t.description,
             value: t.name,
-            hint: t.enabled ? 'ON' : 'off',
+            hint: t.enabled ? 'ON' : 'OFF',
           })),
+          index,
         );
         if (!v) break;
         const t = tools.find((x) => x.name === v);
         if (!t) break;
         r.setToolEnabled(v, !t.enabled);
         pushSys(`${v} ${t.enabled ? 'disabled' : 'enabled'}`);
+        const i = tools.findIndex((x) => x.name === v);
+        index = i >= 0 ? i : 0;
       }
       break;
     }

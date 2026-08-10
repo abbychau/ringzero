@@ -48,6 +48,17 @@ test('sanitizeEnv honors RINGZERO_BASH_FULL_ENV=1 opt-out', () => {
   }
 });
 
+test('bash tool description warns about the platform shell', () => {
+  const desc = bashTool().definition.description;
+  // Every platform gets a Shell: note so the agent knows which utilities exist.
+  assert.ok(/Shell: /.test(desc), `description: ${desc}`);
+  if (process.platform === 'win32') {
+    assert.ok(desc.includes('cmd.exe'), `description: ${desc}`);
+    assert.ok(desc.includes('no grep/tail/ls/cat'), `description: ${desc}`);
+    assert.ok(desc.includes('findstr'), `description: ${desc}`);
+  }
+});
+
 test('bash tool child processes do not see secrets', async () => {
   process.env.RZ_TEST_TOKEN = 'hunter2';
   try {

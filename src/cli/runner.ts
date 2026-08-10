@@ -10,6 +10,7 @@ import { Agent } from '../kernel/agent.js';
 import { defaultTools } from '../tools/index.js';
 import { createTaskTool } from '../tools/task.js';
 import { createDefaultProvider } from '../providers/registry.js';
+import type { EffortLevel } from '../providers/effort.js';
 import {
   createCheckpoint,
   restoreCheckpoint,
@@ -66,6 +67,8 @@ export class Runner {
   readonly gate: PermissionGate;
   sessionId?: string;
   model: string;
+  /** Reasoning effort (low/medium/high/max), from env or /effort (persisted). */
+  effort?: EffortLevel;
   private history: SessionMessage[];
   private checkpointsDir: string;
   private todosDir: string;
@@ -120,6 +123,9 @@ export class Runner {
     };
     const prefs = loadPrefs(this.prefsPaths);
     this.disabledTools = prefs.disabledTools;
+    // Effort: persisted /effort wins over the env default (it is the explicit
+    // per-session choice; env EFFORT is the fallback).
+    this.effort = prefs.effort ?? config.env.effort;
     this.gate = new PermissionGate({
       rules: config.permissions,
       ask: opts.ask ?? (async () => 'no' as const),
@@ -196,6 +202,10 @@ export class Runner {
       contextBudget: this.config.contextBudget,
       preserveRecentTokens: this.config.preserveRecentTokens,
       maxSteps: this.config.maxSteps,
+      // P6.1 caps: abort the run at RINGZERO_COST_CAP / RINGZERO_TOKEN_CAP.
+      model: this.model,
+      costCap: this.config.costCap,
+      tokenCap: this.config.tokenCap,
       planMode: this.planMode,
       requireToolUse: this.requireToolUse,
       signal,
@@ -248,11 +258,11 @@ export class Runner {
     });
   }
 
-  /** Full tool roster for this run, minus user-disabled tools (via /tools). */
-  private buildTools(provider: Provider): Tool[] {
+  /** Full tool roster (including user-disabled tools, for the /tools menu). */
+  private toolRoster(provider: Provider): Tool[] {
     // web_search is opt-in: registered only when a search key is configured.
     const searchKey = process.env.RINGZERO_SEARCH_KEY?.trim();
-    const tools = [
+    return [
       ...defaultTools(),
       // Task mode is autonomous — no ask_user tool (can't pause for a human).
       ...(this.taskMode ? [] : [askUserTool()]),
@@ -276,12 +286,16 @@ export class Runner {
       ...this.pluginTools,
       ...this.mcpTools,
     ];
-    return tools.filter((t) => !this.disabledTools.has(t.definition.name));
+  }
+
+  /** Tool roster for this run, minus user-disabled tools (via /tools). */
+  private buildTools(provider: Provider): Tool[] {
+    return this.toolRoster(provider).filter((t) => !this.disabledTools.has(t.definition.name));
   }
 
   /** Current tool roster for the UI (/tools): name, short description, enabled. */
   listTools(): { name: string; description: string; enabled: boolean }[] {
-    return this.buildTools(this.makeProvider()).map((t) => ({
+    return this.toolRoster(this.makeProvider()).map((t) => ({
       name: t.definition.name,
       description: t.definition.description.slice(0, 80),
       enabled: !this.disabledTools.has(t.definition.name),
@@ -297,12 +311,13 @@ export class Runner {
     return true;
   }
 
-  /** Persist disabled tools + permission overrides + yolo to config.json. */
+  /** Persist disabled tools + permission overrides + yolo + effort to config.json. */
   private savePrefs(): void {
     savePrefs(this.prefsPaths, {
       disabledTools: this.disabledTools,
       permissionOverrides: this.gate.listOverrides(),
       yolo: this.gate.yolo,
+      effort: this.effort,
     });
   }
 
@@ -432,6 +447,12 @@ export class Runner {
     this.model = model;
   }
 
+  /** Set and persist the reasoning effort (low/medium/high/max). */
+  setEffort(level: EffortLevel): void {
+    this.effort = level;
+    this.savePrefs();
+  }
+
   /** Toggle plan mode for new runs (takes effect next turn). */
   setPlanMode(on: boolean): void {
     this.planMode = on;
@@ -478,7 +499,11 @@ export class Runner {
   }
 
   private makeProvider(): Provider {
-    return createDefaultProvider({ ...this.config.env, model: this.model });
+    return createDefaultProvider({
+      ...this.config.env,
+      model: this.model,
+      ...(this.effort !== undefined ? { effort: this.effort } : {}),
+    });
   }
 
   /** Estimated context tokens for the current session history. */

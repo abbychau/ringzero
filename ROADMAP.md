@@ -105,19 +105,19 @@ token-efficient, zero-dep, CJK-first, UX/operability first.
 
 ## P5 — TUI experience (UX focus)
 
-- [ ] **P5.1 Context budget bar** — the StatusBar shows a color-coded token bar
+- [x] **P5.1 Context budget bar** — the StatusBar shows a color-coded token bar
       (green <70%, yellow <90%, red beyond) next to the ctx≈ text, so
       compaction pressure is visible at a glance.
-- [ ] **P5.2 `/retry`** — TUI + REPL re-run the last submitted prompt (new
+- [x] **P5.2 `/retry`** — TUI + REPL re-run the last submitted prompt (new
       agent turn, same session).
-- [ ] **P5.3 Input editing keys** — Ctrl+A / Ctrl+E (home/end) and
+- [x] **P5.3 Input editing keys** — Ctrl+A / Ctrl+E (home/end) and
       Ctrl+← / Ctrl+→ (word jumps) in the TUI input, matching shell muscle
       memory.
 - [ ] **P5.4 Session management** — `/sessions` select gains rename (r) and
       delete (d) actions; REPL `/sessions` shows ids and supports
       `/sessions delete <id>`; RPC `sessions/rename` + `sessions/delete`;
       store gains `renameSession` / `deleteSession`.
-- [ ] **P5.5 Auto session titles** — the first user message becomes the
+- [x] **P5.5 Auto session titles** — the first user message becomes the
       session title (fallback to the current default), so `/sessions`,
       `/export`, and `--sessions` show useful names.
 - [x] **P5.6 `/copy` clipboard command** — `/copy [n|all]` copies the last
@@ -134,22 +134,23 @@ token-efficient, zero-dep, CJK-first, UX/operability first.
 
 ## P6 — Cost & research
 
-- [ ] **P6.1 Cost/token caps** — `RINGZERO_COST_CAP` (USD) and
+- [x] **P6.1 Cost/token caps** — `RINGZERO_COST_CAP` (USD) and
       `RINGZERO_TOKEN_CAP`: the agent exposes cumulative usage mid-run; the
       TUI/REPL/RPC abort the run with a clear status when a cap is hit and
       warn at 80%.
-- [ ] **P6.2 `web_search` tool** — opt-in search tool
+- [x] **P6.2 `web_search` tool** — opt-in search tool
       (`RINGZERO_SEARCH_KEY` + `RINGZERO_SEARCH_ENDPOINT`, Tavily-compatible
       JSON contract documented) registered only when configured; pairs with
       the `task` fan-out for parallel research.
 
 ## P7 — Platform & docs
 
-- [ ] **P7.1 MCP streamable-HTTP test coverage** — the transport already
+- [x] **P7.1 MCP streamable-HTTP test coverage** — the transport already
       exists (`src/mcp/transports.ts`); add an offline test with a local HTTP
       server (JSON + SSE responses) so the `{url}` config path is verified on
-      CI.
-- [ ] **P7.2 Docs & polish** — README env table + command list for everything
+      CI. (Also fixed the transport dropping responses: `start()` now wires
+      the callback.)
+- [x] **P7.2 Docs & polish** — README env table + command list for everything
       above; CHANGELOG entries; roadmap markers flipped.
 
 ## Suggested execution order (Phase 2)
