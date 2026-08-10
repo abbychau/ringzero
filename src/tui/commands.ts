@@ -5,6 +5,7 @@ import {
   fmtUsage,
   SLASH_HINTS,
   slashCommands,
+  historyToBlocks,
   type Action,
   type AskResponse,
   type Option,
@@ -30,6 +31,13 @@ export interface CommandDeps {
 }
 
 const COPY_UNAVAILABLE = '(clipboard unavailable — need clip / pbcopy / xclip / wl-copy / xsel)';
+
+/** Switch the runner to a session and replay its transcript into the TUI. */
+function resumeSession(r: Runner, id: string, dispatch: Dispatch<Action>): boolean {
+  if (!r.resume(id)) return false;
+  dispatch({ type: 'setBlocks', blocks: historyToBlocks(r.historyMessages()) });
+  return true;
+}
 
 /** Arg syntax + key bindings shown below the command list in /help. */
 const HELP_ARGS = [
@@ -244,14 +252,15 @@ export async function handleSlashCommand(line: string, deps: CommandDeps): Promi
         })),
       );
       if (v) {
-        r.resume(v);
+        resumeSession(r, v, deps.dispatch);
         pushSys(`resumed session ${v}`);
       }
       break;
     }
     case 'resume':
-      if (rest[0] && r.resume(rest[0])) pushSys(`resumed session ${rest[0]}`);
-      else pushSys('usage: /resume <sessionId>  (see /sessions)');
+      if (rest[0] && resumeSession(r, rest[0], deps.dispatch)) {
+        pushSys(`resumed session ${rest[0]}`);
+      } else pushSys('usage: /resume <sessionId>  (see /sessions)');
       break;
     case 'new': {
       const res = await deps.askRef.current?.('Start a new session? (current view clears)');

@@ -92,6 +92,15 @@ test('decodeOutput passes valid UTF-8 through (incl. CJK)', () => {
   assert.equal(decodeOutput(Buffer.from('plain ascii\n', 'ascii')), 'plain ascii\n');
 });
 
+test('decodeOutput strips carriage returns (cmd CRLF output)', () => {
+  // Windows cmd/PowerShell emit \r\n; a bare \r inside a TUI row rewinds the
+  // terminal cursor to column 0, scrambling the row and the sidebar column.
+  assert.equal(decodeOutput(Buffer.from('a\r\nb\r\n', 'ascii')), 'a\nb\n');
+  assert.equal(decodeOutput(Buffer.from('a\rb', 'ascii')), 'ab');
+  // CJK content survives.
+  assert.equal(decodeOutput(Buffer.from('你好\r\n世界', 'utf8')), '你好\n世界');
+});
+
 test('decodeOutput falls back to the forced legacy encoding (GBK)', () => {
   process.env.RINGZERO_OS_ENCODING = 'gbk';
   try {

@@ -168,19 +168,19 @@
         display: none !important;
       }
 
-      .hero .install-box {
+      .install-box {
         margin: 30px auto 0;
         max-width: 660px;
         text-align: left;
       }
 
-      .hero .install-tabs {
+      .install-box .install-tabs {
         display: flex;
         gap: 4px;
         margin-bottom: -1px;
       }
 
-      .hero .install-tabs .tab {
+      .install-box .install-tabs .tab {
         font: inherit;
         font-size: 13px;
         font-weight: 600;
@@ -193,20 +193,19 @@
         cursor: pointer;
       }
 
-      .hero .install-tabs .tab:hover {
+      .install-box .install-tabs .tab:hover {
         color: var(--text);
       }
 
-      .hero .install-tabs .tab.active {
+      .install-box .install-tabs .tab.active {
         color: var(--accent);
         border-color: var(--accent);
       }
 
-      .hero .install {
+      .install-box .install {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        flex-direction: column;
+        gap: 8px;
         font-family: ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
         font-size: 14px;
         background: var(--panel);
@@ -216,13 +215,30 @@
         color: var(--text);
       }
 
-      .hero .install .cmd {
+      .install-box .install-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .install-box .cmd-label {
+        flex: none;
+        font-family: inherit;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--muted);
+        min-width: 64px;
+      }
+
+      .install-box .install .cmd {
+        flex: 1;
         overflow-x: auto;
         white-space: nowrap;
         user-select: all;
       }
 
-      .hero .install .ps {
+      .install-box .install .ps {
         color: var(--accent);
         font-weight: 600;
         margin-right: 10px;
@@ -230,7 +246,7 @@
         -webkit-user-select: none;
       }
 
-      .hero .copy-btn {
+      .install-box .copy-btn {
         flex: none;
         font: inherit;
         font-size: 12px;
@@ -244,17 +260,17 @@
         white-space: nowrap;
       }
 
-      .hero .copy-btn:hover {
+      .install-box .copy-btn:hover {
         color: var(--accent);
         border-color: var(--accent);
       }
 
-      .hero .copy-btn.copied {
+      .install-box .copy-btn.copied {
         color: var(--accent);
         border-color: var(--accent);
       }
 
-      .hero .install-note {
+      .install-note {
         margin: 12px auto 0;
         font-size: 13px;
         color: var(--muted);
@@ -644,22 +660,22 @@
         nav a:nth-child(-n + 2) {
           display: none;
         }
-        .hero .install {
+        .install-box .install {
           display: block;
           font-size: 12px;
           overflow-wrap: anywhere;
           text-align: left;
         }
-        .hero .install .cmd {
+        .install-box .install .cmd {
           display: block;
           white-space: normal;
           overflow-wrap: anywhere;
           margin-bottom: 8px;
         }
-        .hero .copy-btn {
+        .install-box .copy-btn {
           display: inline-block;
         }
-        .hero .install-note {
+        .install-note {
           font-size: 12px;
         }
       }
@@ -709,54 +725,54 @@
               <button class="tab" data-os="npm" role="tab" aria-selected="false">npm</button>
             </div>
             <div class="install" data-os="windows" role="tabpanel">
-              <span class="cmd"
-                ><span class="ps">PS&gt;</span>irm https://ringzero.abby.md/install.ps1 | iex</span
-              >
-              <button class="copy-btn" data-copy="irm https://ringzero.abby.md/install.ps1 | iex">
-                Copy
-              </button>
+              <div class="install-row">
+                <span class="cmd"
+                  ><span class="ps">PS&gt;</span>irm https://ringzero.abby.md/install.ps1 | iex</span
+                >
+                <button
+                  class="copy-btn"
+                  data-copy="irm https://ringzero.abby.md/install.ps1 | iex"
+                >
+                  Copy
+                </button>
+              </div>
             </div>
             <div class="install" data-os="macos" role="tabpanel" hidden>
-              <span class="cmd"
-                ><span class="ps">$</span>curl -fsSL https://ringzero.abby.md/install.sh | sh</span
-              >
-              <button
-                class="copy-btn"
-                data-copy="curl -fsSL https://ringzero.abby.md/install.sh | sh"
-              >
-                Copy
-              </button>
+              <div class="install-row">
+                <span class="cmd"
+                  ><span class="ps">$</span>curl -fsSL https://ringzero.abby.md/install.sh | sh</span
+                >
+                <button
+                  class="copy-btn"
+                  data-copy="curl -fsSL https://ringzero.abby.md/install.sh | sh"
+                >
+                  Copy
+                </button>
+              </div>
             </div>
             <div class="install" data-os="linux" role="tabpanel" hidden>
-              <span class="cmd"
-                ><span class="ps">$</span>curl -fsSL https://ringzero.abby.md/install.sh | sh</span
-              >
-              <button
-                class="copy-btn"
-                data-copy="curl -fsSL https://ringzero.abby.md/install.sh | sh"
-              >
-                Copy
-              </button>
+              <div class="install-row">
+                <span class="cmd"
+                  ><span class="ps">$</span>curl -fsSL https://ringzero.abby.md/install.sh | sh</span
+                >
+                <button
+                  class="copy-btn"
+                  data-copy="curl -fsSL https://ringzero.abby.md/install.sh | sh"
+                >
+                  Copy
+                </button>
+              </div>
             </div>
             <div class="install" data-os="npm" role="tabpanel" hidden>
-              <span class="cmd"><span class="ps">$</span>npm i -g ringzero</span>
-              <button class="copy-btn" data-copy="npm i -g ringzero">Copy</button>
+              <div class="install-row">
+                <span class="cmd"><span class="ps">$</span>npm i -g ringzero</span>
+                <button class="copy-btn" data-copy="npm i -g ringzero">Copy</button>
+              </div>
             </div>
           </div>
           <p class="install-note">
             One-line install &middot; no admin needed &middot; then run
             <code>ringzero</code>
-          </p>
-          <p class="install-note">
-            Already installed? Update with
-            <code>ringzero --update</code> &middot; <code>npm i -g ringzero@latest</code> &middot;
-            or re-run the one-liner
-          </p>
-          <p class="install-note">
-            Uninstall?
-            <code>curl -fsSL https://ringzero.abby.md/uninstall.sh | sh</code> (macOS/Linux)
-            &middot; <code>irm https://ringzero.abby.md/uninstall.ps1 | iex</code>
-            (Windows)
           </p>
 
           <div class="term" aria-hidden="true">
@@ -943,6 +959,97 @@ npm link
 <span class="prompt">$</span> ringzero --doctor               <span class="cmt"># environment self-check</span></code></pre>
         </div>
       </section>
+
+      <!-- update & uninstall -->
+      <section id="update">
+        <div class="wrap">
+          <p class="sec-title">Maintain</p>
+          <h2 class="sec-head">Update &amp; Uninstall</h2>
+          <div class="install-box" aria-label="Update or uninstall RingZero">
+            <div class="install-tabs" role="tablist" aria-label="Operating system">
+              <button class="tab active" data-os="windows" role="tab" aria-selected="true">
+                Windows
+              </button>
+              <button class="tab" data-os="macos" role="tab" aria-selected="false">macOS</button>
+              <button class="tab" data-os="linux" role="tab" aria-selected="false">Linux</button>
+              <button class="tab" data-os="npm" role="tab" aria-selected="false">npm</button>
+            </div>
+            <div class="install" data-os="windows" role="tabpanel">
+              <div class="install-row">
+                <span class="cmd-label">Update</span>
+                <span class="cmd"><span class="ps">PS&gt;</span>ringzero --update</span>
+                <button class="copy-btn" data-copy="ringzero --update">Copy</button>
+              </div>
+              <div class="install-row">
+                <span class="cmd-label">Uninstall</span>
+                <span class="cmd"
+                  ><span class="ps">PS&gt;</span>irm https://ringzero.abby.md/uninstall.ps1 | iex</span
+                >
+                <button
+                  class="copy-btn"
+                  data-copy="irm https://ringzero.abby.md/uninstall.ps1 | iex"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <div class="install" data-os="macos" role="tabpanel" hidden>
+              <div class="install-row">
+                <span class="cmd-label">Update</span>
+                <span class="cmd"><span class="ps">$</span>ringzero --update</span>
+                <button class="copy-btn" data-copy="ringzero --update">Copy</button>
+              </div>
+              <div class="install-row">
+                <span class="cmd-label">Uninstall</span>
+                <span class="cmd"
+                  ><span class="ps">$</span>curl -fsSL https://ringzero.abby.md/uninstall.sh | sh</span
+                >
+                <button
+                  class="copy-btn"
+                  data-copy="curl -fsSL https://ringzero.abby.md/uninstall.sh | sh"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <div class="install" data-os="linux" role="tabpanel" hidden>
+              <div class="install-row">
+                <span class="cmd-label">Update</span>
+                <span class="cmd"><span class="ps">$</span>ringzero --update</span>
+                <button class="copy-btn" data-copy="ringzero --update">Copy</button>
+              </div>
+              <div class="install-row">
+                <span class="cmd-label">Uninstall</span>
+                <span class="cmd"
+                  ><span class="ps">$</span>curl -fsSL https://ringzero.abby.md/uninstall.sh | sh</span
+                >
+                <button
+                  class="copy-btn"
+                  data-copy="curl -fsSL https://ringzero.abby.md/uninstall.sh | sh"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <div class="install" data-os="npm" role="tabpanel" hidden>
+              <div class="install-row">
+                <span class="cmd-label">Update</span>
+                <span class="cmd"><span class="ps">$</span>npm i -g ringzero@latest</span>
+                <button class="copy-btn" data-copy="npm i -g ringzero@latest">Copy</button>
+              </div>
+              <div class="install-row">
+                <span class="cmd-label">Uninstall</span>
+                <span class="cmd"><span class="ps">$</span>npm uninstall -g ringzero</span>
+                <button class="copy-btn" data-copy="npm uninstall -g ringzero">Copy</button>
+              </div>
+            </div>
+          </div>
+          <p class="install-note">
+            Already installed? Just re-run the one-liner — it always fetches the latest
+            release.
+          </p>
+        </div>
+      </section>
     </main>
 
     <footer>
@@ -958,20 +1065,23 @@ npm link
 
     <script>
       (function () {
-        // install tabs
-        var tabs = document.querySelectorAll('.install-tabs .tab');
-        var boxes = document.querySelectorAll('.install[data-os]');
-        tabs.forEach(function (tab) {
-          tab.addEventListener('click', function () {
-            tabs.forEach(function (t) {
-              t.classList.remove('active');
-              t.setAttribute('aria-selected', 'false');
-            });
-            tab.classList.add('active');
-            tab.setAttribute('aria-selected', 'true');
-            var os = tab.getAttribute('data-os');
-            boxes.forEach(function (b) {
-              b.hidden = b.getAttribute('data-os') !== os;
+        // install tabs — each install-box manages its own tabs/panels so the
+        // hero box and the update/uninstall section don't fight each other.
+        document.querySelectorAll('.install-box').forEach(function (box) {
+          var tabs = box.querySelectorAll('.install-tabs .tab');
+          var panels = box.querySelectorAll('.install[data-os]');
+          tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+              tabs.forEach(function (t) {
+                t.classList.remove('active');
+                t.setAttribute('aria-selected', 'false');
+              });
+              tab.classList.add('active');
+              tab.setAttribute('aria-selected', 'true');
+              var os = tab.getAttribute('data-os');
+              panels.forEach(function (p) {
+                p.hidden = p.getAttribute('data-os') !== os;
+              });
             });
           });
         });

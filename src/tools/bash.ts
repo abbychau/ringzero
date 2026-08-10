@@ -18,8 +18,18 @@ const MAX_OUTPUT_BYTES = MAX_OUTPUT_CHARS * 4;
  * (byte-cap truncation in runCommand) would otherwise look like invalid UTF-8
  * and wrongly trigger the legacy fallback, mojibake-ing valid UTF-8 content
  * (and its CJK/PUA garbage then breaks TUI row widths).
+ *
+ * Carriage returns are stripped: Windows `cmd`/PowerShell output uses \r\n,
+ * and a bare \r inside a TUI row rewinds the terminal cursor to column 0 —
+ * the rest of the row (including the sidebar column) then renders at the
+ * left edge, breaking the layout.
  */
 export function decodeOutput(buf: Buffer): string {
+  return decodeBuffer(buf).replace(/\r/g, '');
+}
+
+/** Raw decode (UTF-8 with legacy-codepage fallback), before \r stripping. */
+function decodeBuffer(buf: Buffer): string {
   const utf8 = buf.toString('utf8');
   if (!utf8.includes('\uFFFD')) return utf8;
   // Byte-cap truncation can cut a multi-byte char in half, making valid UTF-8
