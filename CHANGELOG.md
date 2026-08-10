@@ -5,6 +5,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-10
+
 ### Added
 
 - TUI input keys: `Ctrl+A`/`Ctrl+E` jump to line start/end, `Ctrl+←`/`Ctrl+→`
@@ -26,6 +28,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Windows shell guidance: the bash tool description and a system-prompt hint
   tell the agent `cmd.exe` has no POSIX utilities and name the working
   alternatives (`dir`, `type`, `findstr`, the fs tools).
+- README documents the one-command uninstallers (`uninstall.sh` /
+  `uninstall.ps1`) and how to remove user data (`~/.ringzero`).
 
 ### Changed
 
@@ -50,6 +54,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   callback and `send()` used a module-level placeholder.
 - bash tool description on Windows now states `cmd.exe` lacks `grep`/`tail`/
   `ls`/`cat` instead of vaguely recommending fs tools.
+
+## [0.5.2] - 2026-08-09
+
+### Added
+
+- Bun standalone binary builds (`npm run build:bun`) with build-time version
+  injection; `ringzero --update` self-updates exe/portable installs; Bun in CI.
+
+### Changed
+
+- bash tool runs through Bun's cross-platform shell under Bun, so POSIX
+  commands (ls, grep, tail) work on Windows too; native fs tools remain the
+  default for file inspection.
+- Windows console switched to UTF-8 at startup (chcp 65001); TUI emojis
+  replaced with bracket tags; sidebar box border replaced with a single
+  vertical line; resume replays the session transcript in the TUI.
+
+### Fixed
+
+- Tool-output mojibake on legacy codepages (GBK/Big5/…) via best-effort
+  decode fallback; TUI width math now uses `string-width`; sidebar alignment
+  when the transcript is shorter than the frame; cache hit rate no longer
+  double-counts cached tokens.
+
+## [0.5.1] - 2026-08-09
+
+### Fixed
+
+- TUI layout when the input wraps (row reservation matches Ink's rendering);
+  npm bin path for npm 11 publish validation.
+
+### Changed
+
+- Homepage install prompts/terminal mockup polish; npm installs told to
+  upgrade via npm.
+
+## [0.5.0] - 2026-08-08
+
+### Added
+
+- `--env <path>` flag to load an explicit env file; only `~/.ringzero/.env` is
+  auto-loaded.
+- README npm install instructions; npm tab on the homepage.
 
 ## [0.4.2] - 2026-08-08
 

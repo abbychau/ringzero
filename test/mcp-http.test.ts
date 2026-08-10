@@ -35,7 +35,9 @@ async function startServer(): Promise<string> {
     if (typeof sid === 'string') seenSessionIds.push(sid);
     if (req.url === '/fail') {
       res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: -32000, message: 'boom' } }));
+      res.end(
+        JSON.stringify({ jsonrpc: '2.0', id: msg.id, error: { code: -32000, message: 'boom' } }),
+      );
       return;
     }
     if (msg.method === 'initialize') {

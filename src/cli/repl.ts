@@ -85,8 +85,7 @@ export async function runRepl(
         else if (ev.type === 'finish') {
           usage = ev.usage;
           reason = ev.reason;
-          if (ev.reason === 'cap' && ev.status)
-            process.stdout.write(`\n[${ev.status}]\n`);
+          if (ev.reason === 'cap' && ev.status) process.stdout.write(`\n[${ev.status}]\n`);
         }
       }
     } catch (err) {

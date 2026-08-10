@@ -208,6 +208,32 @@ curl -fsSL https://ringzero.abby.md/install.sh | sh
 For a dev checkout, pull and rebuild instead:
 `git pull && npm install && npm run build`.
 
+## Uninstall
+
+One-command uninstallers remove the installed binary / app dir and the PATH
+entry the installer added — your data (`~/.ringzero` — sessions, config,
+skills) is always kept:
+
+```powershell
+# Windows
+irm https://ringzero.abby.md/uninstall.ps1 | iex
+```
+
+```bash
+# macOS / Linux
+curl -fsSL https://ringzero.abby.md/uninstall.sh | sh
+```
+
+Installed via npm instead? `npm uninstall -g ringzero`. Via winget?
+`winget uninstall --id Abbychau.RingZero -e`.
+
+To also delete your sessions, config, and skills:
+
+```bash
+rm -rf ~/.ringzero                                          # macOS / Linux
+Remove-Item -Recurse -Force "$env:USERPROFILE\.ringzero"    # Windows
+```
+
 ## How to run & test
 
 ```bash
