@@ -848,6 +848,14 @@
             opencode gateway, EFFORT=max, pass@1 with best-of-N retries across 253 agent trials. No
             task timeouts or resources modified.
           </p>
+          <p class="bench-note">
+            Independent check: <a href="https://artificialanalysis.ai/evaluations/terminalbench-v2-1">
+            Artificial Analysis</a> scores the same deepseek-v4-flash at <strong>78.7%</strong> on
+            Terminal-Bench v2.1 (same 89 tasks, Terminus 2 harness, e2b sandbox, pass@1 over 3
+            repeats). RingZero's harness gets 80.0% from the same model &mdash; the headline is not
+            harness inflation. For reference, the models AA places just above it (Claude Sonnet 5 at
+            80.5%, Muse Spark 1.2 at 80.1%) bracket RingZero's row.
+          </p>
         </div>
       </section>
 
@@ -930,7 +938,9 @@
             <p>
               Put together: near-frontier agentic behavior at commodity-model cost. On the official
               board, the rows around RingZero's 80% are GPT-5.5-class agents; the best official
-              DeepSeek-family entry sits at 39.6%. The gap is the harness, and the harness is small
+              DeepSeek-family entry sits at 39.6%. Artificial Analysis measures the raw model itself
+              at 78.7% on Terminal-Bench v2.1 using the heavyweight Terminus 2 harness &mdash; RingZero
+              pulls 80.0% from the same model. The gap is the harness, and the harness is small
               enough to read in an afternoon.
             </p>
           </article>
