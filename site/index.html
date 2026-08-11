@@ -830,6 +830,11 @@
                 <td class="num">80.0% (71/89)</td>
               </tr>
               <tr>
+                <td>deepseek-v4-flash (raw model)</td>
+                <td>deepseek-v4-flash</td>
+                <td class="num">78.7%<sup>&dagger;</sup></td>
+              </tr>
+              <tr>
                 <td>Terminus 2</td>
                 <td>DeepSeek-V3.2</td>
                 <td class="num">39.6%</td>
@@ -849,7 +854,7 @@
             task timeouts or resources modified.
           </p>
           <p class="bench-note">
-            Independent check: <a href="https://artificialanalysis.ai/evaluations/terminalbench-v2-1">
+            <sup>&dagger;</sup> Independent check: <a href="https://artificialanalysis.ai/evaluations/terminalbench-v2-1">
             Artificial Analysis</a> scores the same deepseek-v4-flash at <strong>78.7%</strong> on
             Terminal-Bench v2.1 (same 89 tasks, Terminus 2 harness, e2b sandbox, pass@1 over 3
             repeats). RingZero's harness gets 80.0% from the same model &mdash; the headline is not
