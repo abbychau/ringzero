@@ -42,7 +42,10 @@ case "$cpu" in
     exit 1
     ;;
 esac
-asset="ringzero-$plat-$arch.zip"
+# Prefer the single-file bun binary; fall back to the portable zip.
+asset_bin="ringzero-$plat-$arch"
+asset_zip="ringzero-$plat-$arch.zip"
+asset="$asset_bin"
 
 # --- install locations ------------------------------------------------------
 data_dir="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -55,11 +58,19 @@ echo 'Fetching the latest RingZero release...'
 release_json="$(curl -fsSL -A "$user_agent" \
   "https://api.github.com/repos/$repo/releases/latest")"
 asset_url="$(printf '%s' "$release_json" | grep -o "https://[^\"]*$asset" | head -n 1)"
+if [ -z "$asset_url" ] && [ "$asset" != "$asset_zip" ]; then
+  asset="$asset_zip"
+  asset_url="$(printf '%s' "$release_json" | grep -o "https://[^\"]*$asset" | head -n 1)"
+fi
 if [ -z "$asset_url" ]; then
   echo "Could not find $asset in the latest release." >&2
   exit 1
 fi
-version="$(printf '%s' "$release_json" | grep -o '"tag_name": *"[^"]*"' | head -n 1 | sed 's/.*"v\?//; s/"$//')"
+version="$(printf '%s' "$release_json" | sed -n 's/.*"tag_name": *"v\?\([^"]*\)".*/\1/p' | head -n 1)"
+if [ -z "$version" ]; then
+  echo "Could not determine the release version." >&2
+  exit 1
+fi
 
 # --- download & unpack ------------------------------------------------------
 tmp="$(mktemp -d)"
@@ -68,11 +79,20 @@ trap 'rm -rf "$tmp"' EXIT
 echo "Downloading RingZero v${version} ($asset)..."
 curl -fsSL -A "$user_agent" -o "$tmp/$asset" "$asset_url"
 echo "Installing to $install_dir..."
-mkdir -p "$install_dir" "$bin_dir" "$tmp/unz"
-unzip -q -o "$tmp/$asset" -d "$tmp/unz"
+mkdir -p "$install_dir" "$bin_dir"
 rm -rf "$install_dir"
-mv "$tmp/unz/ringzero" "$install_dir"
-ln -sf "$install_dir/ringzero" "$bin_path"
+mkdir -p "$install_dir"
+if [ "$asset" = "$asset_zip" ]; then
+  # Portable zip: extract (the zip contains a ringzero/ folder).
+  mkdir -p "$tmp/unz"
+  unzip -q -o "$tmp/$asset" -d "$tmp/unz"
+  mv "$tmp/unz/ringzero" "$install_dir/app"
+  ln -sf "$install_dir/app/ringzero" "$bin_path"
+else
+  # Single-file bun binary.
+  install -m 755 "$tmp/$asset" "$install_dir/ringzero"
+  ln -sf "$install_dir/ringzero" "$bin_path"
+fi
 
 # --- PATH -------------------------------------------------------------------
 case ":$PATH:" in
@@ -93,7 +113,7 @@ case ":$PATH:" in
     ;;
 esac
 
-echo 'Running first-time setup (unpacks the embedded runtime)...'
+echo 'Running first-time setup...'
 "$bin_path" --version
 
 echo ''
